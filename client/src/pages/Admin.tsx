@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
-import { Car, LogOut, RefreshCw, QrCode, Clock, CreditCard, Loader2, ArrowLeft, LayoutDashboard, History, Printer } from "lucide-react";
+import { Car, LogOut, RefreshCw, QrCode, Clock, CreditCard, Loader2, ArrowLeft, LayoutDashboard, History, Printer, Settings, CheckCircle, AlertCircle, ExternalLink } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
@@ -123,6 +123,10 @@ function AdminDashboard({ user, onLogout }: { user: any; onLogout: () => void })
               <QrCode className="w-4 h-4" />
               QRコード
             </TabsTrigger>
+            <TabsTrigger value="settings" className="gap-2">
+              <Settings className="w-4 h-4" />
+              設定
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard">
@@ -135,6 +139,10 @@ function AdminDashboard({ user, onLogout }: { user: any; onLogout: () => void })
 
           <TabsContent value="qrcodes">
             <QRCodesTab />
+          </TabsContent>
+
+          <TabsContent value="settings">
+            <SettingsTab />
           </TabsContent>
         </Tabs>
       </main>
@@ -436,6 +444,154 @@ function QRCodesTab() {
               </div>
             ))}
           </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// 設定タブ
+function SettingsTab() {
+  const { data: stripeStatus, isLoading, refetch } = trpc.stripe.getConnectionStatus.useQuery();
+  const startOnboarding = trpc.stripe.startOnboarding.useMutation({
+    onSuccess: (data) => {
+      // Stripeオンボーディングページを新しいタブで開く
+      window.open(data.url, '_blank');
+      toast.info('Stripeの設定ページを開きました');
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  // URLパラメータをチェック（Stripeオンボーディング完了時）
+  useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const stripeParam = params.get('stripe');
+      if (stripeParam === 'complete') {
+        toast.success('Stripeアカウントの設定が完了しました');
+        refetch();
+        // URLパラメータをクリア
+        window.history.replaceState({}, '', '/admin');
+      } else if (stripeParam === 'refresh') {
+        toast.info('Stripeの設定を続行してください');
+        startOnboarding.mutate();
+      }
+    }
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Stripe Connect 設定 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="w-5 h-5" />
+            決済設定
+          </CardTitle>
+          <CardDescription>
+            Stripeアカウントを接続して、実際の決済を受け付けることができます
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* 接続状態 */}
+            <div className="flex items-center gap-4 p-4 rounded-lg border">
+              {stripeStatus?.onboardingComplete ? (
+                <>
+                  <div className="w-12 h-12 rounded-full bg-[var(--success)]/20 flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6 text-[var(--success)]" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium">接続済み</p>
+                    <p className="text-sm text-muted-foreground">
+                      Stripeアカウントが正常に接続されています。実際の決済を受け付けることができます。
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => startOnboarding.mutate()} disabled={startOnboarding.isPending}>
+                    {startOnboarding.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    設定を編集
+                  </Button>
+                </>
+              ) : stripeStatus?.connected ? (
+                <>
+                  <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
+                    <AlertCircle className="w-6 h-6 text-yellow-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium">設定未完了</p>
+                    <p className="text-sm text-muted-foreground">
+                      Stripeアカウントの設定が完了していません。設定を続行してください。
+                    </p>
+                  </div>
+                  <Button onClick={() => startOnboarding.mutate()} disabled={startOnboarding.isPending}>
+                    {startOnboarding.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    設定を続行
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center">
+                    <CreditCard className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium">未接続</p>
+                    <p className="text-sm text-muted-foreground">
+                      Stripeアカウントを接続すると、クレジットカード決済を受け付けることができます。
+                    </p>
+                  </div>
+                  <Button onClick={() => startOnboarding.mutate()} disabled={startOnboarding.isPending}>
+                    {startOnboarding.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Stripeを接続
+                  </Button>
+                </>
+              )}
+            </div>
+
+            {/* 説明 */}
+            <div className="p-4 rounded-lg bg-secondary/50">
+              <h4 className="font-medium mb-2">決済モードについて</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• <strong>デモモード</strong>: Stripe未接続時はデモ決済（実際の課金なし）が使用されます</li>
+                <li>• <strong>本番モード</strong>: Stripe接続後は実際のクレジットカード決済が有効になります</li>
+                <li>• 決済金額は直接あなたのStripeアカウントに入金されます</li>
+              </ul>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 料金設定（将来用） */}
+      <Card>
+        <CardHeader>
+          <CardTitle>料金設定</CardTitle>
+          <CardDescription>駐車料金の設定</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="p-4 rounded-lg border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">基本料金</p>
+                <p className="text-sm text-muted-foreground">1時間あたりの料金</p>
+              </div>
+              <p className="text-2xl font-bold">¥300</p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-4">
+            ※ 料金設定の変更は現在開発中です
+          </p>
         </CardContent>
       </Card>
     </div>

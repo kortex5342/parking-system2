@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { Car, QrCode, Camera, ArrowLeft, CheckCircle2, Clock, Loader2 } from "lucide-react";
+import { Car, QrCode, Camera, ArrowLeft, CheckCircle2, Clock, Loader2, CreditCard, ExternalLink } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { toast } from "sonner";
@@ -26,6 +26,23 @@ export default function Scan() {
     if (qr) {
       setQrCode(qr);
       setView("space-info");
+    }
+    
+    // Stripe決済完了時の処理
+    const paymentStatus = params.get("payment");
+    const token = params.get("token");
+    if (paymentStatus === "success" && token) {
+      localStorage.removeItem("parkingSessionToken");
+      setSessionToken(null);
+      setView("payment-success");
+      toast.success("決済が完了しました");
+      // URLパラメータをクリア
+      window.history.replaceState({}, '', '/scan');
+    } else if (paymentStatus === "cancel" && token) {
+      setSessionToken(token);
+      setView("exit-confirm");
+      toast.info("決済がキャンセルされました");
+      window.history.replaceState({}, '', '/scan');
     }
     
     // ローカルストレージからセッショントークンを復元
@@ -516,8 +533,9 @@ function PaymentView({
   onSuccess: () => void;
   onBack: () => void;
 }) {
-  const [paymentMethod, setPaymentMethod] = useState<"paypay" | "credit_card" | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<"paypay" | "credit_card" | "stripe" | null>(null);
   const { data } = trpc.parking.calculateExit.useQuery({ sessionToken });
+  const { data: stripeEnabled } = trpc.stripe.isPaymentEnabled.useQuery();
   
   const paymentMutation = trpc.parking.processPayment.useMutation({
     onSuccess: () => {
@@ -529,13 +547,30 @@ function PaymentView({
     },
   });
 
+  const stripeCheckoutMutation = trpc.stripe.createCheckout.useMutation({
+    onSuccess: (data) => {
+      toast.info("Stripeの決済ページへ移動します");
+      window.open(data.checkoutUrl, '_blank');
+    },
+    onError: (err) => {
+      toast.error(err.message);
+    },
+  });
+
   const handlePayment = () => {
     if (!paymentMethod) {
       toast.error("決済方法を選択してください");
       return;
     }
-    paymentMutation.mutate({ sessionToken, paymentMethod });
+    
+    if (paymentMethod === "stripe") {
+      stripeCheckoutMutation.mutate({ sessionToken });
+    } else {
+      paymentMutation.mutate({ sessionToken, paymentMethod });
+    }
   };
+
+  const isProcessing = paymentMutation.isPending || stripeCheckoutMutation.isPending;
 
   return (
     <div className="space-y-6">
@@ -554,6 +589,40 @@ function PaymentView({
       )}
 
       <div className="space-y-3">
+        {/* Stripe実決済（有効な場合） */}
+        {stripeEnabled?.enabled && (
+          <button
+            onClick={() => setPaymentMethod("stripe")}
+            className={`w-full p-4 rounded-xl border-2 transition-all ${
+              paymentMethod === "stripe"
+                ? "border-[var(--success)] bg-[var(--success)]/10"
+                : "border-border hover:border-muted-foreground"
+            }`}
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <CreditCard className="w-6 h-6 text-white" />
+              </div>
+              <div className="text-left flex-1">
+                <p className="font-bold">クレジットカード</p>
+                <p className="text-sm text-muted-foreground">Stripe決済</p>
+              </div>
+              {paymentMethod === "stripe" ? (
+                <CheckCircle2 className="w-6 h-6" style={{ color: 'var(--success)' }} />
+              ) : (
+                <span className="text-xs px-2 py-1 bg-[var(--success)]/20 text-[var(--success)] rounded">おすすめ</span>
+              )}
+            </div>
+          </button>
+        )}
+
+        {/* デモ決済セクション */}
+        {!stripeEnabled?.enabled && (
+          <div className="text-xs text-muted-foreground text-center py-2">
+            ※ デモモード（実際の課金は発生しません）
+          </div>
+        )}
+
         <button
           onClick={() => setPaymentMethod("paypay")}
           className={`w-full p-4 rounded-xl border-2 transition-all ${
@@ -568,7 +637,7 @@ function PaymentView({
             </div>
             <div className="text-left">
               <p className="font-bold">PayPay</p>
-              <p className="text-sm text-muted-foreground">デモ決済</p>
+              <p className="text-sm text-muted-foreground">{stripeEnabled?.enabled ? "デモ決済" : ""}</p>
             </div>
             {paymentMethod === "paypay" && (
               <CheckCircle2 className="w-6 h-6 ml-auto" style={{ color: 'var(--success)' }} />
@@ -590,7 +659,7 @@ function PaymentView({
             </div>
             <div className="text-left">
               <p className="font-bold">クレジットカード</p>
-              <p className="text-sm text-muted-foreground">デモ決済</p>
+              <p className="text-sm text-muted-foreground">{stripeEnabled?.enabled ? "デモ決済" : ""}</p>
             </div>
             {paymentMethod === "credit_card" && (
               <CheckCircle2 className="w-6 h-6 ml-auto" style={{ color: 'var(--success)' }} />
@@ -602,23 +671,27 @@ function PaymentView({
       <div className="space-y-3">
         <Button
           onClick={handlePayment}
-          disabled={!paymentMethod || paymentMutation.isPending}
+          disabled={!paymentMethod || isProcessing}
           className="w-full"
           size="lg"
         >
-          {paymentMutation.isPending ? (
+          {isProcessing ? (
             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+          ) : paymentMethod === "stripe" ? (
+            <ExternalLink className="w-5 h-5 mr-2" />
           ) : null}
-          決済する
+          {paymentMethod === "stripe" ? "Stripeで決済" : "決済する"}
         </Button>
         <Button variant="outline" onClick={onBack} className="w-full">
           戻る
         </Button>
       </div>
 
-      <p className="text-xs text-center text-muted-foreground">
-        ※これはデモ決済です。実際の課金は発生しません。
-      </p>
+      {paymentMethod !== "stripe" && (
+        <p className="text-xs text-center text-muted-foreground">
+          ※これはデモ決済です。実際の課金は発生しません。
+        </p>
+      )}
     </div>
   );
 }

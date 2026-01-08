@@ -19,7 +19,21 @@ import {
   getAllActiveParkingRecords,
   getAllPaymentRecords,
   calculateParkingFee,
+  updateUserStripeAccount,
+  updateUserStripeOnboardingComplete,
+  getUserById,
+  getAdminUser,
+  createPaymentRecordWithStripe,
 } from "./db";
+import {
+  stripe,
+  createConnectedAccount,
+  createAccountLink,
+  getConnectedAccount,
+  isAccountReady,
+  createCheckoutSession,
+  isStripeAvailable,
+} from "./stripe";
 
 // 管理者専用プロシージャ
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -240,6 +254,151 @@ export const appRouter = router({
       await initializeParkingSpaces();
       return { success: true };
     }),
+  }),
+
+  // Stripe Connect API
+  stripe: router({
+    // Stripeが利用可能か確認
+    isAvailable: publicProcedure.query(() => {
+      return { available: isStripeAvailable() };
+    }),
+
+    // 管理者のStripe接続状態取得
+    getConnectionStatus: adminProcedure.query(async ({ ctx }) => {
+      const user = await getUserById(ctx.user.id);
+      if (!user) {
+        return { connected: false, onboardingComplete: false, accountId: null };
+      }
+
+      if (!user.stripeAccountId) {
+        return { connected: false, onboardingComplete: false, accountId: null };
+      }
+
+      // Stripeアカウントの状態を確認
+      const accountReady = await isAccountReady(user.stripeAccountId);
+      
+      // オンボーディング完了状態を更新
+      if (accountReady && !user.stripeOnboardingComplete) {
+        await updateUserStripeOnboardingComplete(ctx.user.id, true);
+      }
+
+      return {
+        connected: true,
+        onboardingComplete: accountReady,
+        accountId: user.stripeAccountId,
+      };
+    }),
+
+    // Stripe Connectアカウント作成・オンボーディング開始
+    startOnboarding: adminProcedure.mutation(async ({ ctx }) => {
+      if (!stripe) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Stripeが設定されていません' });
+      }
+
+      const user = await getUserById(ctx.user.id);
+      if (!user) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'ユーザーが見つかりません' });
+      }
+
+      let accountId = user.stripeAccountId;
+
+      // アカウントがない場合は作成
+      if (!accountId) {
+        accountId = await createConnectedAccount(user.email || `admin-${user.id}@parking.local`);
+        if (!accountId) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Stripeアカウントの作成に失敗しました' });
+        }
+        await updateUserStripeAccount(ctx.user.id, accountId, false);
+      }
+
+      // オンボーディングリンク作成
+      const origin = ctx.req.headers.origin || 'http://localhost:3000';
+      const accountLinkUrl = await createAccountLink(
+        accountId,
+        `${origin}/admin?stripe=refresh`,
+        `${origin}/admin?stripe=complete`
+      );
+
+      if (!accountLinkUrl) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'オンボーディングリンクの作成に失敗しました' });
+      }
+
+      return { url: accountLinkUrl };
+    }),
+
+    // 公開用: 管理者のStripe接続状態確認（決済可能か）
+    isPaymentEnabled: publicProcedure.query(async () => {
+      const admin = await getAdminUser();
+      if (!admin || !admin.stripeAccountId) {
+        return { enabled: false, reason: 'Stripeが接続されていません' };
+      }
+
+      const accountReady = await isAccountReady(admin.stripeAccountId);
+      if (!accountReady) {
+        return { enabled: false, reason: 'Stripeアカウントの設定が完了していません' };
+      }
+
+      return { enabled: true, reason: null };
+    }),
+
+    // Checkout Session作成（実決済用）
+    createCheckout: publicProcedure
+      .input(z.object({
+        sessionToken: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // 管理者のStripeアカウント取得
+        const admin = await getAdminUser();
+        if (!admin || !admin.stripeAccountId) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Stripeが接続されていません' });
+        }
+
+        const accountReady = await isAccountReady(admin.stripeAccountId);
+        if (!accountReady) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Stripeアカウントの設定が完了していません' });
+        }
+
+        // 入庫記録取得
+        const record = await getParkingRecordByToken(input.sessionToken);
+        if (!record) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '入庫記録が見つかりません' });
+        }
+
+        if (record.status === 'completed') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'この入庫記録は既に精算済みです' });
+        }
+
+        const exitTime = Date.now();
+        const { durationMinutes, amount } = calculateParkingFee(record.entryTime, exitTime);
+
+        const origin = ctx.req.headers.origin || 'http://localhost:3000';
+        const hours = Math.floor(durationMinutes / 60);
+        const mins = durationMinutes % 60;
+        const durationStr = hours > 0 ? `${hours}時間${mins}分` : `${mins}分`;
+
+        const checkoutUrl = await createCheckoutSession(
+          amount,
+          admin.stripeAccountId,
+          `${origin}/scan?payment=success&token=${input.sessionToken}`,
+          `${origin}/scan?payment=cancel&token=${input.sessionToken}`,
+          {
+            sessionToken: input.sessionToken,
+            spaceNumber: record.spaceNumber.toString(),
+            duration: durationStr,
+            parkingRecordId: record.id.toString(),
+          }
+        );
+
+        if (!checkoutUrl) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Checkoutセッションの作成に失敗しました' });
+        }
+
+        return {
+          checkoutUrl,
+          amount,
+          durationMinutes,
+        };
+      }),
   }),
 });
 

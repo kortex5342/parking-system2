@@ -30,3 +30,12 @@
 
 ## テスト
 - [x] バックエンドAPIのVitestテスト
+
+## Stripe Connect連携
+- [x] Stripe機能の追加（webdev_add_feature）
+- [x] Stripe Connect OAuth認証フロー実装
+- [x] 管理者設定画面にStripe接続ボタン追加
+- [x] Stripe接続状態の表示（接続済み/未接続）
+- [x] 決済処理をStripe実決済に切り替え
+- [x] デモ決済モードとの切り替え機能
+- [x] Stripe連携のテスト

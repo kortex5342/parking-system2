@@ -15,6 +15,13 @@
       "when": 1767860542075,
       "tag": "0001_high_sharon_carter",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1767895573893,
+      "tag": "0002_normal_changeling",
+      "breakpoints": true
     }
   ]
 }

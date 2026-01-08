@@ -267,3 +267,89 @@ export function calculateParkingFee(entryTime: number, exitTime: number): { dura
   
   return { durationMinutes, amount };
 }
+
+
+// ========== Stripe Connect Queries ==========
+
+// ユーザーのStripeアカウントIDを更新
+export async function updateUserStripeAccount(userId: number, stripeAccountId: string, onboardingComplete: boolean = false) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    stripeAccountId,
+    stripeOnboardingComplete: onboardingComplete,
+  }).where(eq(users.id, userId));
+}
+
+// ユーザーのStripeオンボーディング完了を更新
+export async function updateUserStripeOnboardingComplete(userId: number, complete: boolean) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    stripeOnboardingComplete: complete,
+  }).where(eq(users.id, userId));
+}
+
+// ユーザーIDでユーザー取得
+export async function getUserById(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+// 管理者ユーザー取得（Stripe接続状態確認用）
+export async function getAdminUser() {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(users).where(eq(users.role, "admin")).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+// 決済記録作成（Stripe対応版）
+export async function createPaymentRecordWithStripe(data: {
+  parkingRecordId: number;
+  spaceNumber: number;
+  entryTime: number;
+  exitTime: number;
+  durationMinutes: number;
+  amount: number;
+  paymentMethod: "paypay" | "credit_card";
+  stripePaymentIntentId?: string;
+  isDemo: boolean;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const transactionId = data.isDemo ? `TXN-${nanoid(16)}` : undefined;
+
+  const result = await db.insert(paymentRecords).values({
+    parkingRecordId: data.parkingRecordId,
+    spaceNumber: data.spaceNumber,
+    entryTime: data.entryTime,
+    exitTime: data.exitTime,
+    durationMinutes: data.durationMinutes,
+    amount: data.amount,
+    paymentMethod: data.paymentMethod,
+    paymentStatus: "pending",
+    transactionId,
+    stripePaymentIntentId: data.stripePaymentIntentId,
+    isDemo: data.isDemo,
+  });
+
+  return Number(result[0].insertId);
+}
+
+// Stripe PaymentIntent IDで決済記録を更新
+export async function updatePaymentByStripePaymentIntent(stripePaymentIntentId: string, status: "completed" | "failed") {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(paymentRecords).set({ 
+    paymentStatus: status 
+  }).where(eq(paymentRecords.stripePaymentIntentId, stripePaymentIntentId));
+}

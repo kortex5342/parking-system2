@@ -13,6 +13,9 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  // Stripe Connect
+  stripeAccountId: varchar("stripeAccountId", { length: 64 }), // Stripe Connected Account ID
+  stripeOnboardingComplete: boolean("stripeOnboardingComplete").default(false).notNull(),
 });
 
 export type User = typeof users.$inferSelect;
@@ -65,6 +68,8 @@ export const paymentRecords = mysqlTable("payment_records", {
   paymentMethod: mysqlEnum("paymentMethod", ["paypay", "credit_card"]).notNull(),
   paymentStatus: mysqlEnum("paymentStatus", ["pending", "completed", "failed"]).default("pending").notNull(),
   transactionId: varchar("transactionId", { length: 64 }), // デモ用トランザクションID
+  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 64 }), // Stripe PaymentIntent ID
+  isDemo: boolean("isDemo").default(true).notNull(), // デモ決済か実決済か
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
