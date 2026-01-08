@@ -1,11 +1,11 @@
-import { eq } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, parkingSpaces, parkingRecords, paymentRecords, InsertParkingSpace, InsertParkingRecord, InsertPaymentRecord } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import { nanoid } from 'nanoid';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -18,6 +18,7 @@ export async function getDb() {
   return _db;
 }
 
+// ========== User Queries ==========
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) {
     throw new Error("User openId is required for upsert");
@@ -89,4 +90,180 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// ========== Parking Space Queries ==========
+
+// 初期化: 10台分の駐車スペースを作成
+export async function initializeParkingSpaces(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  for (let i = 1; i <= 10; i++) {
+    const qrCode = `PARK-${i.toString().padStart(2, '0')}-${nanoid(8)}`;
+    try {
+      await db.insert(parkingSpaces).values({
+        spaceNumber: i,
+        status: "available",
+        qrCode,
+      }).onDuplicateKeyUpdate({
+        set: { updatedAt: new Date() }
+      });
+    } catch (error) {
+      // スペースが既に存在する場合は無視
+    }
+  }
+}
+
+// 全駐車スペース取得
+export async function getAllParkingSpaces() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(parkingSpaces).orderBy(parkingSpaces.spaceNumber);
+}
+
+// QRコードで駐車スペース取得
+export async function getParkingSpaceByQrCode(qrCode: string) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(parkingSpaces).where(eq(parkingSpaces.qrCode, qrCode)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+// スペース番号で駐車スペース取得
+export async function getParkingSpaceByNumber(spaceNumber: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(parkingSpaces).where(eq(parkingSpaces.spaceNumber, spaceNumber)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+// 駐車スペースのステータス更新
+export async function updateParkingSpaceStatus(spaceId: number, status: "available" | "occupied") {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(parkingSpaces).set({ status }).where(eq(parkingSpaces.id, spaceId));
+}
+
+// ========== Parking Record Queries ==========
+
+// 入庫記録作成
+export async function createParkingRecord(spaceId: number, spaceNumber: number): Promise<string> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const sessionToken = nanoid(32);
+  const entryTime = Date.now();
+
+  await db.insert(parkingRecords).values({
+    spaceId,
+    spaceNumber,
+    entryTime,
+    status: "active",
+    sessionToken,
+  });
+
+  // スペースを使用中に更新
+  await updateParkingSpaceStatus(spaceId, "occupied");
+
+  return sessionToken;
+}
+
+// セッショントークンで入庫記録取得
+export async function getParkingRecordByToken(sessionToken: string) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(parkingRecords).where(eq(parkingRecords.sessionToken, sessionToken)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+// アクティブな入庫記録をスペースIDで取得
+export async function getActiveParkingRecordBySpaceId(spaceId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(parkingRecords)
+    .where(and(eq(parkingRecords.spaceId, spaceId), eq(parkingRecords.status, "active")))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+// 入庫記録を完了に更新
+export async function completeParkingRecord(recordId: number, exitTime: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(parkingRecords).set({ 
+    exitTime, 
+    status: "completed" 
+  }).where(eq(parkingRecords.id, recordId));
+}
+
+// 全アクティブ入庫記録取得（管理者用）
+export async function getAllActiveParkingRecords() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(parkingRecords)
+    .where(eq(parkingRecords.status, "active"))
+    .orderBy(parkingRecords.spaceNumber);
+}
+
+// ========== Payment Record Queries ==========
+
+// 決済記録作成
+export async function createPaymentRecord(data: {
+  parkingRecordId: number;
+  spaceNumber: number;
+  entryTime: number;
+  exitTime: number;
+  durationMinutes: number;
+  amount: number;
+  paymentMethod: "paypay" | "credit_card";
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const transactionId = `TXN-${nanoid(16)}`;
+
+  const result = await db.insert(paymentRecords).values({
+    ...data,
+    paymentStatus: "pending",
+    transactionId,
+  });
+
+  return Number(result[0].insertId);
+}
+
+// 決済完了に更新
+export async function completePayment(paymentId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(paymentRecords).set({ 
+    paymentStatus: "completed" 
+  }).where(eq(paymentRecords.id, paymentId));
+}
+
+// 全決済履歴取得（管理者用）
+export async function getAllPaymentRecords(limit: number = 100) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(paymentRecords)
+    .orderBy(desc(paymentRecords.createdAt))
+    .limit(limit);
+}
+
+// 料金計算（1時間300円、端数切り上げ）
+export function calculateParkingFee(entryTime: number, exitTime: number): { durationMinutes: number; amount: number } {
+  const durationMs = exitTime - entryTime;
+  const durationMinutes = Math.ceil(durationMs / (1000 * 60));
+  const hours = Math.ceil(durationMinutes / 60);
+  const amount = hours * 300;
+  
+  return { durationMinutes, amount };
+}
