@@ -353,3 +353,150 @@ export async function updatePaymentByStripePaymentIntent(stripePaymentIntentId: 
     paymentStatus: status 
   }).where(eq(paymentRecords.stripePaymentIntentId, stripePaymentIntentId));
 }
+
+
+// ========== Square Connect Queries ==========
+
+// ユーザーのSquare接続情報を更新
+export async function updateUserSquareAccount(
+  userId: number, 
+  data: {
+    accessToken: string;
+    refreshToken: string;
+    merchantId: string;
+    locationId?: string;
+  }
+) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    squareAccessToken: data.accessToken,
+    squareRefreshToken: data.refreshToken,
+    squareMerchantId: data.merchantId,
+    squareLocationId: data.locationId || null,
+    squareConnected: true,
+  }).where(eq(users.id, userId));
+}
+
+// SquareロケーションIDを更新
+export async function updateUserSquareLocation(userId: number, locationId: string) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    squareLocationId: locationId,
+  }).where(eq(users.id, userId));
+}
+
+// Square接続を解除
+export async function disconnectUserSquare(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    squareAccessToken: null,
+    squareRefreshToken: null,
+    squareMerchantId: null,
+    squareLocationId: null,
+    squareConnected: false,
+  }).where(eq(users.id, userId));
+}
+
+// ========== PayPay API Queries ==========
+
+// ユーザーのPayPay接続情報を更新
+export async function updateUserPayPayAccount(
+  userId: number, 
+  data: {
+    apiKey: string;
+    apiSecret: string;
+    merchantId: string;
+  }
+) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    paypayApiKey: data.apiKey,
+    paypayApiSecret: data.apiSecret,
+    paypayMerchantId: data.merchantId,
+    paypayConnected: true,
+  }).where(eq(users.id, userId));
+}
+
+// PayPay接続を解除
+export async function disconnectUserPayPay(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    paypayApiKey: null,
+    paypayApiSecret: null,
+    paypayMerchantId: null,
+    paypayConnected: false,
+  }).where(eq(users.id, userId));
+}
+
+// ========== カード決済プロバイダー選択 ==========
+
+// カード決済プロバイダーを設定
+export async function setCardPaymentProvider(userId: number, provider: "stripe" | "square" | null) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    cardPaymentProvider: provider,
+  }).where(eq(users.id, userId));
+}
+
+// Stripe接続を解除
+export async function disconnectUserStripe(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    stripeAccountId: null,
+    stripeOnboardingComplete: false,
+  }).where(eq(users.id, userId));
+}
+
+// ========== 決済記録（拡張版） ==========
+
+// 決済記録作成（全プロバイダー対応版）
+export async function createPaymentRecordFull(data: {
+  parkingRecordId: number;
+  spaceNumber: number;
+  entryTime: number;
+  exitTime: number;
+  durationMinutes: number;
+  amount: number;
+  paymentMethod: "paypay" | "credit_card" | "stripe" | "square";
+  stripePaymentIntentId?: string;
+  squarePaymentId?: string;
+  paypayPaymentId?: string;
+  isDemo: boolean;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const transactionId = data.isDemo ? `TXN-${nanoid(16)}` : undefined;
+
+  const result = await db.insert(paymentRecords).values({
+    parkingRecordId: data.parkingRecordId,
+    spaceNumber: data.spaceNumber,
+    entryTime: data.entryTime,
+    exitTime: data.exitTime,
+    durationMinutes: data.durationMinutes,
+    amount: data.amount,
+    paymentMethod: data.paymentMethod,
+    paymentStatus: "pending",
+    transactionId,
+    stripePaymentIntentId: data.stripePaymentIntentId,
+    squarePaymentId: data.squarePaymentId,
+    paypayPaymentId: data.paypayPaymentId,
+    isDemo: data.isDemo,
+  });
+
+  return Number(result[0].insertId);
+}

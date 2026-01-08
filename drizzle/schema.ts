@@ -16,6 +16,19 @@ export const users = mysqlTable("users", {
   // Stripe Connect
   stripeAccountId: varchar("stripeAccountId", { length: 64 }), // Stripe Connected Account ID
   stripeOnboardingComplete: boolean("stripeOnboardingComplete").default(false).notNull(),
+  // Square
+  squareAccessToken: varchar("squareAccessToken", { length: 256 }), // Square Access Token
+  squareMerchantId: varchar("squareMerchantId", { length: 64 }), // Square Merchant ID
+  squareLocationId: varchar("squareLocationId", { length: 64 }), // Square Location ID
+  squareRefreshToken: varchar("squareRefreshToken", { length: 256 }), // Square Refresh Token
+  squareConnected: boolean("squareConnected").default(false).notNull(),
+  // PayPay
+  paypayApiKey: varchar("paypayApiKey", { length: 256 }), // PayPay API Key
+  paypayApiSecret: varchar("paypayApiSecret", { length: 256 }), // PayPay API Secret
+  paypayMerchantId: varchar("paypayMerchantId", { length: 64 }), // PayPay Merchant ID
+  paypayConnected: boolean("paypayConnected").default(false).notNull(),
+  // 決済プロバイダー選択（stripe or square）
+  cardPaymentProvider: mysqlEnum("cardPaymentProvider", ["stripe", "square"]),
 });
 
 export type User = typeof users.$inferSelect;
@@ -65,10 +78,12 @@ export const paymentRecords = mysqlTable("payment_records", {
   exitTime: bigint("exitTime", { mode: "number" }).notNull(), // 出庫時刻
   durationMinutes: int("durationMinutes").notNull(), // 駐車時間（分）
   amount: int("amount").notNull(), // 料金（円）
-  paymentMethod: mysqlEnum("paymentMethod", ["paypay", "credit_card"]).notNull(),
+  paymentMethod: mysqlEnum("paymentMethod", ["paypay", "credit_card", "stripe", "square"]).notNull(),
   paymentStatus: mysqlEnum("paymentStatus", ["pending", "completed", "failed"]).default("pending").notNull(),
   transactionId: varchar("transactionId", { length: 64 }), // デモ用トランザクションID
   stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 64 }), // Stripe PaymentIntent ID
+  squarePaymentId: varchar("squarePaymentId", { length: 64 }), // Square Payment ID
+  paypayPaymentId: varchar("paypayPaymentId", { length: 64 }), // PayPay Payment ID
   isDemo: boolean("isDemo").default(true).notNull(), // デモ決済か実決済か
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

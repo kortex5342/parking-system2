@@ -39,3 +39,24 @@
 - [x] 決済処理をStripe実決済に切り替え
 - [x] デモ決済モードとの切り替え機能
 - [x] Stripe連携のテスト
+
+## Square決済連携
+- [x] データベーススキーマにSquare関連フィールド追加
+- [x] Square APIヘルパー作成
+- [x] Square OAuth認証フロー実装
+- [x] 管理者設定画面にSquare接続UI追加
+- [x] Square Checkout Session作成API
+- [x] Stripe/Square排他選択ロジック
+
+## PayPay API連携
+- [x] データベーススキーマにPayPay関連フィールド追加
+- [x] PayPay APIヘルパー作成
+- [x] 管理者設定画面にPayPay API設定UI追加
+- [x] PayPay QRコード決済API実装
+- [x] 決済画面にPayPay実決済オプション追加
+
+## 決済設定UI
+- [x] クレジットカード決済セクション（Stripe/Square排他選択）
+- [x] PayPay決済セクション（独立設定）
+- [x] 接続状態の表示
+- [x] 決済プロバイダーテスト作成・実行

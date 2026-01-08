@@ -24,6 +24,14 @@ import {
   getUserById,
   getAdminUser,
   createPaymentRecordWithStripe,
+  updateUserSquareAccount,
+  updateUserSquareLocation,
+  disconnectUserSquare,
+  updateUserPayPayAccount,
+  disconnectUserPayPay,
+  setCardPaymentProvider,
+  disconnectUserStripe,
+  createPaymentRecordFull,
 } from "./db";
 import {
   stripe,
@@ -34,6 +42,20 @@ import {
   createCheckoutSession,
   isStripeAvailable,
 } from "./stripe";
+import {
+  isSquareAvailable,
+  getSquareOAuthUrl,
+  exchangeSquareCode,
+  getSquareLocations,
+  createSquareCheckoutLink,
+  revokeSquareToken,
+} from "./square";
+import {
+  isPayPayAvailable,
+  createPayPayQRCode,
+  getPayPayPaymentStatus,
+  testPayPayConnection,
+} from "./paypay";
 
 // 管理者専用プロシージャ
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -399,6 +421,358 @@ export const appRouter = router({
           durationMinutes,
         };
       }),
+  }),
+
+  // Square API
+  square: router({
+    // Squareが利用可能か確認
+    isAvailable: publicProcedure.query(() => {
+      return { available: isSquareAvailable() };
+    }),
+
+    // 管理者のSquare接続状態取得
+    getConnectionStatus: adminProcedure.query(async ({ ctx }) => {
+      const user = await getUserById(ctx.user.id);
+      if (!user) {
+        return { connected: false, merchantId: null, locationId: null, locations: [] };
+      }
+
+      if (!user.squareConnected || !user.squareAccessToken) {
+        return { connected: false, merchantId: null, locationId: null, locations: [] };
+      }
+
+      // ロケーション一覧を取得
+      const locations = await getSquareLocations(user.squareAccessToken) || [];
+
+      return {
+        connected: true,
+        merchantId: user.squareMerchantId,
+        locationId: user.squareLocationId,
+        locations,
+      };
+    }),
+
+    // Square OAuth認証URL取得
+    getOAuthUrl: adminProcedure.mutation(async ({ ctx }) => {
+      const origin = ctx.req.headers.origin || 'http://localhost:3000';
+      const redirectUri = `${origin}/admin?square=callback`;
+      const state = `square-${ctx.user.id}-${Date.now()}`;
+      
+      const url = getSquareOAuthUrl(redirectUri, state);
+      if (!url) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Squareが設定されていません' });
+      }
+
+      return { url, state };
+    }),
+
+    // Square OAuthコールバック処理
+    handleCallback: adminProcedure
+      .input(z.object({ code: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const origin = ctx.req.headers.origin || 'http://localhost:3000';
+        const redirectUri = `${origin}/admin?square=callback`;
+
+        const tokenData = await exchangeSquareCode(input.code, redirectUri);
+        if (!tokenData) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Square認証に失敗しました' });
+        }
+
+        // ロケーション一覧を取得
+        const locations = await getSquareLocations(tokenData.accessToken) || [];
+        const defaultLocation = locations.find(l => l.status === 'ACTIVE')?.id || locations[0]?.id;
+
+        await updateUserSquareAccount(ctx.user.id, {
+          accessToken: tokenData.accessToken,
+          refreshToken: tokenData.refreshToken,
+          merchantId: tokenData.merchantId,
+          locationId: defaultLocation,
+        });
+
+        // Squareをカード決済プロバイダーとして設定
+        await setCardPaymentProvider(ctx.user.id, 'square');
+
+        return { success: true, merchantId: tokenData.merchantId, locations };
+      }),
+
+    // ロケーション設定
+    setLocation: adminProcedure
+      .input(z.object({ locationId: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        await updateUserSquareLocation(ctx.user.id, input.locationId);
+        return { success: true };
+      }),
+
+    // Square接続解除
+    disconnect: adminProcedure.mutation(async ({ ctx }) => {
+      const user = await getUserById(ctx.user.id);
+      if (user?.squareAccessToken) {
+        await revokeSquareToken(user.squareAccessToken);
+      }
+      await disconnectUserSquare(ctx.user.id);
+      
+      // カード決済プロバイダーをクリア
+      const updatedUser = await getUserById(ctx.user.id);
+      if (updatedUser?.cardPaymentProvider === 'square') {
+        await setCardPaymentProvider(ctx.user.id, null);
+      }
+
+      return { success: true };
+    }),
+
+    // 公開用: Square決済が有効か
+    isPaymentEnabled: publicProcedure.query(async () => {
+      const admin = await getAdminUser();
+      if (!admin || !admin.squareConnected || !admin.squareLocationId) {
+        return { enabled: false, reason: 'Squareが接続されていません' };
+      }
+      return { enabled: true, reason: null };
+    }),
+
+    // Square Checkout作成
+    createCheckout: publicProcedure
+      .input(z.object({ sessionToken: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const admin = await getAdminUser();
+        if (!admin || !admin.squareConnected || !admin.squareAccessToken || !admin.squareLocationId) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Squareが接続されていません' });
+        }
+
+        const record = await getParkingRecordByToken(input.sessionToken);
+        if (!record) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '入庫記録が見つかりません' });
+        }
+
+        if (record.status === 'completed') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'この入庫記録は既に精算済みです' });
+        }
+
+        const exitTime = Date.now();
+        const { durationMinutes, amount } = calculateParkingFee(record.entryTime, exitTime);
+
+        const origin = ctx.req.headers.origin || 'http://localhost:3000';
+        const result = await createSquareCheckoutLink(
+          admin.squareAccessToken,
+          admin.squareLocationId,
+          amount,
+          `${origin}/scan?payment=success&token=${input.sessionToken}`,
+          `${origin}/scan?payment=cancel&token=${input.sessionToken}`,
+          {
+            sessionToken: input.sessionToken,
+            spaceNumber: record.spaceNumber.toString(),
+          }
+        );
+
+        if (!result) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Square Checkoutの作成に失敗しました' });
+        }
+
+        return {
+          checkoutUrl: result.checkoutUrl,
+          orderId: result.orderId,
+          amount,
+          durationMinutes,
+        };
+      }),
+  }),
+
+  // PayPay API
+  paypay: router({
+    // PayPay接続状態取得
+    getConnectionStatus: adminProcedure.query(async ({ ctx }) => {
+      const user = await getUserById(ctx.user.id);
+      if (!user) {
+        return { connected: false, merchantId: null };
+      }
+
+      return {
+        connected: user.paypayConnected,
+        merchantId: user.paypayMerchantId,
+      };
+    }),
+
+    // PayPay API情報を保存
+    saveCredentials: adminProcedure
+      .input(z.object({
+        apiKey: z.string().min(1),
+        apiSecret: z.string().min(1),
+        merchantId: z.string().min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // 接続テスト
+        const testResult = await testPayPayConnection(input.apiKey, input.apiSecret, input.merchantId);
+        if (!testResult.success) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: testResult.message });
+        }
+
+        await updateUserPayPayAccount(ctx.user.id, {
+          apiKey: input.apiKey,
+          apiSecret: input.apiSecret,
+          merchantId: input.merchantId,
+        });
+
+        return { success: true, message: testResult.message };
+      }),
+
+    // PayPay接続解除
+    disconnect: adminProcedure.mutation(async ({ ctx }) => {
+      await disconnectUserPayPay(ctx.user.id);
+      return { success: true };
+    }),
+
+    // 公開用: PayPay決済が有効か
+    isPaymentEnabled: publicProcedure.query(async () => {
+      const admin = await getAdminUser();
+      if (!admin || !admin.paypayConnected) {
+        return { enabled: false, reason: 'PayPayが接続されていません' };
+      }
+      return { enabled: true, reason: null };
+    }),
+
+    // PayPay QRコード決済作成
+    createPayment: publicProcedure
+      .input(z.object({ sessionToken: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const admin = await getAdminUser();
+        if (!admin || !admin.paypayConnected || !admin.paypayApiKey || !admin.paypayApiSecret || !admin.paypayMerchantId) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'PayPayが接続されていません' });
+        }
+
+        const record = await getParkingRecordByToken(input.sessionToken);
+        if (!record) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '入庫記録が見つかりません' });
+        }
+
+        if (record.status === 'completed') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'この入庫記録は既に精算済みです' });
+        }
+
+        const exitTime = Date.now();
+        const { durationMinutes, amount } = calculateParkingFee(record.entryTime, exitTime);
+
+        const origin = ctx.req.headers.origin || 'http://localhost:3000';
+        const orderId = `PARK-${record.id}-${Date.now()}`;
+
+        const result = await createPayPayQRCode(
+          admin.paypayApiKey,
+          admin.paypayApiSecret,
+          admin.paypayMerchantId,
+          amount,
+          orderId,
+          `駐車料金 スペース${record.spaceNumber}番`,
+          `${origin}/scan?payment=success&token=${input.sessionToken}&paypay=true`
+        );
+
+        if (!result) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'PayPay QRコードの作成に失敗しました' });
+        }
+
+        return {
+          qrCodeUrl: result.url,
+          deeplink: result.deeplink,
+          codeId: result.codeId,
+          orderId,
+          amount,
+          durationMinutes,
+        };
+      }),
+  }),
+
+  // 決済設定統合API
+  paymentSettings: router({
+    // 全決済サービスの接続状態取得
+    getAllStatus: adminProcedure.query(async ({ ctx }) => {
+      const user = await getUserById(ctx.user.id);
+      if (!user) {
+        return {
+          stripe: { connected: false, onboardingComplete: false },
+          square: { connected: false },
+          paypay: { connected: false },
+          cardPaymentProvider: null,
+        };
+      }
+
+      let stripeOnboardingComplete = user.stripeOnboardingComplete;
+      if (user.stripeAccountId && !stripeOnboardingComplete) {
+        stripeOnboardingComplete = await isAccountReady(user.stripeAccountId);
+      }
+
+      return {
+        stripe: {
+          connected: !!user.stripeAccountId,
+          onboardingComplete: stripeOnboardingComplete,
+        },
+        square: {
+          connected: user.squareConnected,
+          merchantId: user.squareMerchantId,
+          locationId: user.squareLocationId,
+        },
+        paypay: {
+          connected: user.paypayConnected,
+          merchantId: user.paypayMerchantId,
+        },
+        cardPaymentProvider: user.cardPaymentProvider,
+      };
+    }),
+
+    // カード決済プロバイダーを切り替え
+    setCardProvider: adminProcedure
+      .input(z.object({ provider: z.enum(['stripe', 'square']) }))
+      .mutation(async ({ input, ctx }) => {
+        const user = await getUserById(ctx.user.id);
+        if (!user) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'ユーザーが見つかりません' });
+        }
+
+        // 選択したプロバイダーが接続されているか確認
+        if (input.provider === 'stripe') {
+          if (!user.stripeAccountId || !user.stripeOnboardingComplete) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Stripeが接続されていません' });
+          }
+        } else if (input.provider === 'square') {
+          if (!user.squareConnected) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Squareが接続されていません' });
+          }
+        }
+
+        await setCardPaymentProvider(ctx.user.id, input.provider);
+        return { success: true };
+      }),
+
+    // Stripe接続解除
+    disconnectStripe: adminProcedure.mutation(async ({ ctx }) => {
+      await disconnectUserStripe(ctx.user.id);
+      
+      // カード決済プロバイダーをクリア
+      const user = await getUserById(ctx.user.id);
+      if (user?.cardPaymentProvider === 'stripe') {
+        await setCardPaymentProvider(ctx.user.id, null);
+      }
+
+      return { success: true };
+    }),
+
+    // 公開用: 利用可能な決済方法一覧
+    getAvailableMethods: publicProcedure.query(async () => {
+      const admin = await getAdminUser();
+      if (!admin) {
+        return { card: null, paypay: false };
+      }
+
+      let cardProvider: 'stripe' | 'square' | null = null;
+      
+      if (admin.cardPaymentProvider === 'stripe' && admin.stripeAccountId && admin.stripeOnboardingComplete) {
+        const accountReady = await isAccountReady(admin.stripeAccountId);
+        if (accountReady) cardProvider = 'stripe';
+      } else if (admin.cardPaymentProvider === 'square' && admin.squareConnected && admin.squareLocationId) {
+        cardProvider = 'square';
+      }
+
+      return {
+        card: cardProvider,
+        paypay: admin.paypayConnected,
+      };
+    }),
   }),
 });
 
