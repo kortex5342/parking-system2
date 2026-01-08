@@ -212,6 +212,29 @@ export async function cancelPayPayPayment(
 }
 
 /**
+ * PayPay認証情報を検証
+ */
+export async function verifyPayPayCredentials(
+  apiKey: string,
+  apiSecret: string,
+  merchantId: string
+): Promise<{ success: boolean; error?: string }> {
+  // フォーマットチェック
+  if (!apiKey || apiKey.length < 10) {
+    return { success: false, error: "API Keyの形式が正しくありません" };
+  }
+  if (!apiSecret || apiSecret.length < 10) {
+    return { success: false, error: "API Secretの形式が正しくありません" };
+  }
+  if (!merchantId || merchantId.length < 5) {
+    return { success: false, error: "Merchant IDの形式が正しくありません" };
+  }
+  
+  // PayPay APIはテスト用エンドポイントがないため、フォーマットチェックのみでOKとする
+  return { success: true };
+}
+
+/**
  * PayPay API接続をテスト
  */
 export async function testPayPayConnection(

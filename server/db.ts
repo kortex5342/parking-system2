@@ -500,3 +500,96 @@ export async function createPaymentRecordFull(data: {
 
   return Number(result[0].insertId);
 }
+
+
+// ========== Stripe APIキー直接入力方式 ==========
+
+// StripeのAPIキーを保存
+export async function saveUserStripeApiKeys(
+  userId: number, 
+  data: {
+    secretKey: string;
+    publishableKey: string;
+  }
+) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    stripeSecretKey: data.secretKey,
+    stripePublishableKey: data.publishableKey,
+    stripeConnected: true,
+    cardPaymentProvider: 'stripe',
+  }).where(eq(users.id, userId));
+}
+
+// Stripe APIキー接続を解除
+export async function disconnectUserStripeApiKeys(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    stripeSecretKey: null,
+    stripePublishableKey: null,
+    stripeConnected: false,
+  }).where(eq(users.id, userId));
+}
+
+// ========== Square APIキー直接入力方式 ==========
+
+// SquareのAccess Tokenを保存
+export async function saveUserSquareAccessToken(
+  userId: number, 
+  accessToken: string
+) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    squareAccessToken: accessToken,
+    squareConnected: true,
+    cardPaymentProvider: 'square',
+  }).where(eq(users.id, userId));
+}
+
+// ========== 料金設定 ==========
+
+// 料金設定を更新
+export async function updatePricingSettings(
+  userId: number, 
+  data: {
+    unitMinutes: number;
+    amount: number;
+  }
+) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    pricingUnitMinutes: data.unitMinutes,
+    pricingAmount: data.amount,
+  }).where(eq(users.id, userId));
+}
+
+// 料金設定を取得
+export async function getPricingSettings() {
+  const admin = await getAdminUser();
+  if (!admin) {
+    return { unitMinutes: 60, amount: 300 }; // デフォルト値
+  }
+  return {
+    unitMinutes: admin.pricingUnitMinutes,
+    amount: admin.pricingAmount,
+  };
+}
+
+// 動的料金計算
+export async function calculateParkingFeeDynamic(entryTime: number, exitTime: number): Promise<{ durationMinutes: number; amount: number }> {
+  const pricing = await getPricingSettings();
+  const durationMs = exitTime - entryTime;
+  const durationMinutes = Math.ceil(durationMs / (1000 * 60));
+  const units = Math.ceil(durationMinutes / pricing.unitMinutes);
+  const amount = units * pricing.amount;
+  
+  return { durationMinutes, amount };
+}

@@ -13,7 +13,11 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-  // Stripe Connect
+  // Stripe (APIキー直接入力方式)
+  stripeSecretKey: varchar("stripeSecretKey", { length: 256 }), // Stripe Secret Key
+  stripePublishableKey: varchar("stripePublishableKey", { length: 256 }), // Stripe Publishable Key
+  stripeConnected: boolean("stripeConnected").default(false).notNull(),
+  // 旧Stripe Connect (後方互換)
   stripeAccountId: varchar("stripeAccountId", { length: 64 }), // Stripe Connected Account ID
   stripeOnboardingComplete: boolean("stripeOnboardingComplete").default(false).notNull(),
   // Square
@@ -29,6 +33,9 @@ export const users = mysqlTable("users", {
   paypayConnected: boolean("paypayConnected").default(false).notNull(),
   // 決済プロバイダー選択（stripe or square）
   cardPaymentProvider: mysqlEnum("cardPaymentProvider", ["stripe", "square"]),
+  // 料金設定
+  pricingUnitMinutes: int("pricingUnitMinutes").default(60).notNull(), // 課金単位（分）10-60
+  pricingAmount: int("pricingAmount").default(300).notNull(), // 料金（円）
 });
 
 export type User = typeof users.$inferSelect;

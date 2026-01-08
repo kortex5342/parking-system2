@@ -6,7 +6,7 @@ import { Link } from "wouter";
 import QRCode from "qrcode";
 
 export default function PrintQR() {
-  const { data, isLoading } = trpc.parking.getAllSpaces.useQuery();
+  const { data, isLoading } = trpc.parking.getSpaces.useQuery();
   const [baseUrl, setBaseUrl] = useState("");
   const [qrCodes, setQrCodes] = useState<Record<number, string>>({});
 
@@ -18,7 +18,7 @@ export default function PrintQR() {
 
   useEffect(() => {
     if (data && baseUrl) {
-      data.forEach(async (space) => {
+      data.forEach(async (space: { id: number; qrCode: string; spaceNumber: number }) => {
         const url = `${baseUrl}/scan?qr=${space.qrCode}`;
         const dataUrl = await QRCode.toDataURL(url, { width: 200, margin: 2 });
         setQrCodes((prev) => ({ ...prev, [space.id]: dataUrl }));
@@ -67,7 +67,7 @@ export default function PrintQR() {
       {/* QRコードグリッド */}
       <main className="p-8">
         <div className="grid grid-cols-2 gap-8 print:gap-4">
-          {data.map((space) => (
+          {data.map((space: { id: number; qrCode: string; spaceNumber: number }) => (
             <div
               key={space.id}
               className="border-2 border-black rounded-lg p-6 text-center break-inside-avoid"

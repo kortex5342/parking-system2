@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import Stripe from "stripe";
 import {
   initializeParkingSpaces,
   getAllParkingSpaces,
@@ -19,42 +20,23 @@ import {
   getAllActiveParkingRecords,
   getAllPaymentRecords,
   calculateParkingFee,
-  updateUserStripeAccount,
-  updateUserStripeOnboardingComplete,
   getUserById,
   getAdminUser,
-  createPaymentRecordWithStripe,
-  updateUserSquareAccount,
-  updateUserSquareLocation,
+  createPaymentRecordFull,
+  saveUserStripeApiKeys,
+  disconnectUserStripeApiKeys,
+  saveUserSquareAccessToken,
   disconnectUserSquare,
   updateUserPayPayAccount,
   disconnectUserPayPay,
   setCardPaymentProvider,
-  disconnectUserStripe,
-  createPaymentRecordFull,
+  updatePricingSettings,
+  getPricingSettings,
+  calculateParkingFeeDynamic,
 } from "./db";
 import {
-  stripe,
-  createConnectedAccount,
-  createAccountLink,
-  getConnectedAccount,
-  isAccountReady,
-  createCheckoutSession,
-  isStripeAvailable,
-} from "./stripe";
-import {
-  isSquareAvailable,
-  getSquareOAuthUrl,
-  exchangeSquareCode,
-  getSquareLocations,
-  createSquareCheckoutLink,
-  revokeSquareToken,
-} from "./square";
-import {
-  isPayPayAvailable,
   createPayPayQRCode,
-  getPayPayPaymentStatus,
-  testPayPayConnection,
+  verifyPayPayCredentials,
 } from "./paypay";
 
 // 管理者専用プロシージャ
@@ -64,6 +46,136 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   }
   return next({ ctx });
 });
+
+// Stripe APIキーのテスト
+async function testStripeApiKey(secretKey: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const stripe = new Stripe(secretKey);
+    await stripe.balance.retrieve();
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Stripe APIキーが無効です' };
+  }
+}
+
+// Square Access Tokenのテスト
+async function testSquareAccessToken(accessToken: string): Promise<{ success: boolean; error?: string; merchantId?: string }> {
+  try {
+    const response = await fetch('https://connect.squareup.com/v2/merchants/me', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Square-Version': '2024-01-18',
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      return { success: false, error: `Square API エラー: ${response.status}` };
+    }
+    
+    const data = await response.json();
+    return { success: true, merchantId: data.merchant?.id };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Square Access Tokenが無効です' };
+  }
+}
+
+// Stripe Checkout Session作成（直接APIキー使用）
+async function createStripeCheckout(
+  secretKey: string,
+  amount: number,
+  successUrl: string,
+  cancelUrl: string,
+  metadata: Record<string, string>
+): Promise<string | null> {
+  try {
+    const stripe = new Stripe(secretKey);
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'jpy',
+            product_data: {
+              name: '駐車料金',
+              description: `駐車スペース${metadata.spaceNumber}番 - ${metadata.duration}`,
+            },
+            unit_amount: amount,
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata,
+    });
+    return session.url;
+  } catch (error) {
+    console.error('[Stripe] Checkout creation failed:', error);
+    return null;
+  }
+}
+
+// Square Checkout Link作成
+async function createSquareCheckout(
+  accessToken: string,
+  amount: number,
+  successUrl: string,
+  metadata: Record<string, string>
+): Promise<{ url: string; orderId: string } | null> {
+  try {
+    // まずロケーションを取得
+    const locResponse = await fetch('https://connect.squareup.com/v2/locations', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Square-Version': '2024-01-18',
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!locResponse.ok) return null;
+    const locData = await locResponse.json();
+    const locationId = locData.locations?.[0]?.id;
+    if (!locationId) return null;
+
+    const idempotencyKey = `parking-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    
+    const response = await fetch('https://connect.squareup.com/v2/online-checkout/payment-links', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Square-Version': '2024-01-18',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        idempotency_key: idempotencyKey,
+        quick_pay: {
+          name: `駐車料金 スペース${metadata.spaceNumber}番`,
+          price_money: {
+            amount: amount,
+            currency: 'JPY',
+          },
+          location_id: locationId,
+        },
+        checkout_options: {
+          redirect_url: successUrl,
+        },
+      }),
+    });
+    
+    if (!response.ok) return null;
+    const data = await response.json();
+    return {
+      url: data.payment_link?.url,
+      orderId: data.payment_link?.order_id,
+    };
+  } catch (error) {
+    console.error('[Square] Checkout creation failed:', error);
+    return null;
+  }
+}
 
 export const appRouter = router({
   system: systemRouter,
@@ -78,18 +190,12 @@ export const appRouter = router({
 
   // 駐車場管理API
   parking: router({
-    // 初期化（10台分のスペース作成）
-    initialize: publicProcedure.mutation(async () => {
-      await initializeParkingSpaces();
-      return { success: true };
-    }),
-
-    // 全スペース取得
-    getAllSpaces: publicProcedure.query(async () => {
+    // 全駐車スペース取得
+    getSpaces: publicProcedure.query(async () => {
       return await getAllParkingSpaces();
     }),
 
-    // QRコードでスペース情報取得
+    // QRコードで駐車スペース情報取得
     getSpaceByQrCode: publicProcedure
       .input(z.object({ qrCode: z.string() }))
       .query(async ({ input }) => {
@@ -98,51 +204,32 @@ export const appRouter = router({
           throw new TRPCError({ code: 'NOT_FOUND', message: '駐車スペースが見つかりません' });
         }
         
-        // アクティブな入庫記録があるか確認
         const activeRecord = await getActiveParkingRecordBySpaceId(space.id);
+        const pricing = await getPricingSettings();
         
         return {
           space,
           activeRecord,
-          canEnter: space.status === 'available',
-          canExit: space.status === 'occupied' && activeRecord !== null,
+          pricing,
         };
       }),
 
-    // スペース番号でスペース情報取得
-    getSpaceByNumber: publicProcedure
-      .input(z.object({ spaceNumber: z.number().min(1).max(10) }))
-      .query(async ({ input }) => {
-        const space = await getParkingSpaceByNumber(input.spaceNumber);
-        if (!space) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: '駐車スペースが見つかりません' });
-        }
-        
-        const activeRecord = await getActiveParkingRecordBySpaceId(space.id);
-        
-        return {
-          space,
-          activeRecord,
-          canEnter: space.status === 'available',
-          canExit: space.status === 'occupied' && activeRecord !== null,
-        };
-      }),
-
-    // 入庫登録
-    enter: publicProcedure
+    // 入庫処理
+    checkIn: publicProcedure
       .input(z.object({ qrCode: z.string() }))
       .mutation(async ({ input }) => {
         const space = await getParkingSpaceByQrCode(input.qrCode);
         if (!space) {
           throw new TRPCError({ code: 'NOT_FOUND', message: '駐車スペースが見つかりません' });
         }
-        
+
         if (space.status === 'occupied') {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'このスペースは既に使用中です' });
         }
-        
+
         const sessionToken = await createParkingRecord(space.id, space.spaceNumber);
-        
+        await updateParkingSpaceStatus(space.id, 'occupied');
+
         return {
           success: true,
           sessionToken,
@@ -151,32 +238,34 @@ export const appRouter = router({
         };
       }),
 
-    // 出庫・料金計算
-    calculateExit: publicProcedure
+    // 出庫情報取得（料金計算）
+    getCheckoutInfo: publicProcedure
       .input(z.object({ sessionToken: z.string() }))
       .query(async ({ input }) => {
         const record = await getParkingRecordByToken(input.sessionToken);
         if (!record) {
           throw new TRPCError({ code: 'NOT_FOUND', message: '入庫記録が見つかりません' });
         }
-        
+
         if (record.status === 'completed') {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'この入庫記録は既に精算済みです' });
         }
-        
+
         const exitTime = Date.now();
-        const { durationMinutes, amount } = calculateParkingFee(record.entryTime, exitTime);
-        
+        const { durationMinutes, amount } = await calculateParkingFeeDynamic(record.entryTime, exitTime);
+        const pricing = await getPricingSettings();
+
         return {
           record,
           exitTime,
           durationMinutes,
           amount,
+          pricing,
         };
       }),
 
-    // 決済処理（デモ）
-    processPayment: publicProcedure
+    // 出庫処理（デモ決済）
+    checkOut: publicProcedure
       .input(z.object({
         sessionToken: z.string(),
         paymentMethod: z.enum(['paypay', 'credit_card']),
@@ -186,15 +275,14 @@ export const appRouter = router({
         if (!record) {
           throw new TRPCError({ code: 'NOT_FOUND', message: '入庫記録が見つかりません' });
         }
-        
+
         if (record.status === 'completed') {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'この入庫記録は既に精算済みです' });
         }
-        
+
         const exitTime = Date.now();
-        const { durationMinutes, amount } = calculateParkingFee(record.entryTime, exitTime);
-        
-        // 決済記録作成
+        const { durationMinutes, amount } = await calculateParkingFeeDynamic(record.entryTime, exitTime);
+
         const paymentId = await createPaymentRecord({
           parkingRecordId: record.id,
           spaceNumber: record.spaceNumber,
@@ -204,45 +292,31 @@ export const appRouter = router({
           amount,
           paymentMethod: input.paymentMethod,
         });
-        
-        // デモ決済：常に成功とする
+
         await completePayment(paymentId);
-        
-        // 入庫記録を完了に更新
         await completeParkingRecord(record.id, exitTime);
         
-        // スペースを空きに更新
-        await updateParkingSpaceStatus(record.spaceId, 'available');
-        
+        const space = await getParkingSpaceByNumber(record.spaceNumber);
+        if (space) {
+          await updateParkingSpaceStatus(space.id, 'available');
+        }
+
         return {
           success: true,
           paymentId,
           amount,
           durationMinutes,
-          paymentMethod: input.paymentMethod,
         };
-      }),
-
-    // セッショントークンで入庫記録取得
-    getRecordByToken: publicProcedure
-      .input(z.object({ sessionToken: z.string() }))
-      .query(async ({ input }) => {
-        const record = await getParkingRecordByToken(input.sessionToken);
-        if (!record) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: '入庫記録が見つかりません' });
-        }
-        return record;
       }),
   }),
 
-  // 管理者用API
+  // 管理者API
   admin: router({
-    // 全スペースと入庫状況取得
+    // ダッシュボード情報取得
     getDashboard: adminProcedure.query(async () => {
       const spaces = await getAllParkingSpaces();
       const activeRecords = await getAllActiveParkingRecords();
       
-      // スペースごとにアクティブな入庫記録をマッピング
       const spaceRecordMap = new Map(activeRecords.map(r => [r.spaceId, r]));
       
       const spacesWithRecords = spaces.map(space => ({
@@ -278,109 +352,76 @@ export const appRouter = router({
     }),
   }),
 
-  // Stripe Connect API
+  // Stripe API（APIキー直接入力方式）
   stripe: router({
-    // Stripeが利用可能か確認
-    isAvailable: publicProcedure.query(() => {
-      return { available: isStripeAvailable() };
-    }),
-
-    // 管理者のStripe接続状態取得
+    // 接続状態取得
     getConnectionStatus: adminProcedure.query(async ({ ctx }) => {
       const user = await getUserById(ctx.user.id);
       if (!user) {
-        return { connected: false, onboardingComplete: false, accountId: null };
+        return { connected: false };
       }
-
-      if (!user.stripeAccountId) {
-        return { connected: false, onboardingComplete: false, accountId: null };
-      }
-
-      // Stripeアカウントの状態を確認
-      const accountReady = await isAccountReady(user.stripeAccountId);
-      
-      // オンボーディング完了状態を更新
-      if (accountReady && !user.stripeOnboardingComplete) {
-        await updateUserStripeOnboardingComplete(ctx.user.id, true);
-      }
-
       return {
-        connected: true,
-        onboardingComplete: accountReady,
-        accountId: user.stripeAccountId,
+        connected: user.stripeConnected,
+        hasSecretKey: !!user.stripeSecretKey,
+        hasPublishableKey: !!user.stripePublishableKey,
       };
     }),
 
-    // Stripe Connectアカウント作成・オンボーディング開始
-    startOnboarding: adminProcedure.mutation(async ({ ctx }) => {
-      if (!stripe) {
-        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Stripeが設定されていません' });
-      }
-
-      const user = await getUserById(ctx.user.id);
-      if (!user) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'ユーザーが見つかりません' });
-      }
-
-      let accountId = user.stripeAccountId;
-
-      // アカウントがない場合は作成
-      if (!accountId) {
-        accountId = await createConnectedAccount(user.email || `admin-${user.id}@parking.local`);
-        if (!accountId) {
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Stripeアカウントの作成に失敗しました' });
+    // APIキー保存（接続テスト付き）
+    saveApiKeys: adminProcedure
+      .input(z.object({
+        secretKey: z.string().min(1),
+        publishableKey: z.string().min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // 接続テスト
+        const testResult = await testStripeApiKey(input.secretKey);
+        if (!testResult.success) {
+          throw new TRPCError({ 
+            code: 'BAD_REQUEST', 
+            message: testResult.error || 'Stripe APIキーの検証に失敗しました' 
+          });
         }
-        await updateUserStripeAccount(ctx.user.id, accountId, false);
+
+        // 保存
+        await saveUserStripeApiKeys(ctx.user.id, {
+          secretKey: input.secretKey,
+          publishableKey: input.publishableKey,
+        });
+
+        return { success: true, message: 'Stripeに接続しました' };
+      }),
+
+    // 接続解除
+    disconnect: adminProcedure.mutation(async ({ ctx }) => {
+      await disconnectUserStripeApiKeys(ctx.user.id);
+      
+      const user = await getUserById(ctx.user.id);
+      if (user?.cardPaymentProvider === 'stripe') {
+        await setCardPaymentProvider(ctx.user.id, null);
       }
 
-      // オンボーディングリンク作成
-      const origin = ctx.req.headers.origin || 'http://localhost:3000';
-      const accountLinkUrl = await createAccountLink(
-        accountId,
-        `${origin}/admin?stripe=refresh`,
-        `${origin}/admin?stripe=complete`
-      );
-
-      if (!accountLinkUrl) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'オンボーディングリンクの作成に失敗しました' });
-      }
-
-      return { url: accountLinkUrl };
+      return { success: true };
     }),
 
-    // 公開用: 管理者のStripe接続状態確認（決済可能か）
+    // 公開用: Stripe決済が有効か
     isPaymentEnabled: publicProcedure.query(async () => {
       const admin = await getAdminUser();
-      if (!admin || !admin.stripeAccountId) {
+      if (!admin || !admin.stripeConnected || !admin.stripeSecretKey) {
         return { enabled: false, reason: 'Stripeが接続されていません' };
       }
-
-      const accountReady = await isAccountReady(admin.stripeAccountId);
-      if (!accountReady) {
-        return { enabled: false, reason: 'Stripeアカウントの設定が完了していません' };
-      }
-
       return { enabled: true, reason: null };
     }),
 
-    // Checkout Session作成（実決済用）
+    // Checkout Session作成
     createCheckout: publicProcedure
-      .input(z.object({
-        sessionToken: z.string(),
-      }))
+      .input(z.object({ sessionToken: z.string() }))
       .mutation(async ({ input, ctx }) => {
-        // 管理者のStripeアカウント取得
         const admin = await getAdminUser();
-        if (!admin || !admin.stripeAccountId) {
+        if (!admin || !admin.stripeConnected || !admin.stripeSecretKey) {
           throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Stripeが接続されていません' });
         }
 
-        const accountReady = await isAccountReady(admin.stripeAccountId);
-        if (!accountReady) {
-          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Stripeアカウントの設定が完了していません' });
-        }
-
-        // 入庫記録取得
         const record = await getParkingRecordByToken(input.sessionToken);
         if (!record) {
           throw new TRPCError({ code: 'NOT_FOUND', message: '入庫記録が見つかりません' });
@@ -391,16 +432,16 @@ export const appRouter = router({
         }
 
         const exitTime = Date.now();
-        const { durationMinutes, amount } = calculateParkingFee(record.entryTime, exitTime);
+        const { durationMinutes, amount } = await calculateParkingFeeDynamic(record.entryTime, exitTime);
 
         const origin = ctx.req.headers.origin || 'http://localhost:3000';
         const hours = Math.floor(durationMinutes / 60);
         const mins = durationMinutes % 60;
         const durationStr = hours > 0 ? `${hours}時間${mins}分` : `${mins}分`;
 
-        const checkoutUrl = await createCheckoutSession(
+        const checkoutUrl = await createStripeCheckout(
+          admin.stripeSecretKey,
           amount,
-          admin.stripeAccountId,
           `${origin}/scan?payment=success&token=${input.sessionToken}`,
           `${origin}/scan?payment=cancel&token=${input.sessionToken}`,
           {
@@ -415,105 +456,52 @@ export const appRouter = router({
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Checkoutセッションの作成に失敗しました' });
         }
 
-        return {
-          checkoutUrl,
-          amount,
-          durationMinutes,
-        };
+        return { checkoutUrl, amount, durationMinutes };
       }),
   }),
 
-  // Square API
+  // Square API（Access Token直接入力方式）
   square: router({
-    // Squareが利用可能か確認
-    isAvailable: publicProcedure.query(() => {
-      return { available: isSquareAvailable() };
-    }),
-
-    // 管理者のSquare接続状態取得
+    // 接続状態取得
     getConnectionStatus: adminProcedure.query(async ({ ctx }) => {
       const user = await getUserById(ctx.user.id);
       if (!user) {
-        return { connected: false, merchantId: null, locationId: null, locations: [] };
+        return { connected: false };
       }
-
-      if (!user.squareConnected || !user.squareAccessToken) {
-        return { connected: false, merchantId: null, locationId: null, locations: [] };
-      }
-
-      // ロケーション一覧を取得
-      const locations = await getSquareLocations(user.squareAccessToken) || [];
-
       return {
-        connected: true,
+        connected: user.squareConnected,
+        hasAccessToken: !!user.squareAccessToken,
         merchantId: user.squareMerchantId,
-        locationId: user.squareLocationId,
-        locations,
       };
     }),
 
-    // Square OAuth認証URL取得
-    getOAuthUrl: adminProcedure.mutation(async ({ ctx }) => {
-      const origin = ctx.req.headers.origin || 'http://localhost:3000';
-      const redirectUri = `${origin}/admin?square=callback`;
-      const state = `square-${ctx.user.id}-${Date.now()}`;
-      
-      const url = getSquareOAuthUrl(redirectUri, state);
-      if (!url) {
-        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Squareが設定されていません' });
-      }
-
-      return { url, state };
-    }),
-
-    // Square OAuthコールバック処理
-    handleCallback: adminProcedure
-      .input(z.object({ code: z.string() }))
+    // Access Token保存（接続テスト付き）
+    saveAccessToken: adminProcedure
+      .input(z.object({
+        accessToken: z.string().min(1),
+      }))
       .mutation(async ({ input, ctx }) => {
-        const origin = ctx.req.headers.origin || 'http://localhost:3000';
-        const redirectUri = `${origin}/admin?square=callback`;
-
-        const tokenData = await exchangeSquareCode(input.code, redirectUri);
-        if (!tokenData) {
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Square認証に失敗しました' });
+        // 接続テスト
+        const testResult = await testSquareAccessToken(input.accessToken);
+        if (!testResult.success) {
+          throw new TRPCError({ 
+            code: 'BAD_REQUEST', 
+            message: testResult.error || 'Square Access Tokenの検証に失敗しました' 
+          });
         }
 
-        // ロケーション一覧を取得
-        const locations = await getSquareLocations(tokenData.accessToken) || [];
-        const defaultLocation = locations.find(l => l.status === 'ACTIVE')?.id || locations[0]?.id;
+        // 保存
+        await saveUserSquareAccessToken(ctx.user.id, input.accessToken);
 
-        await updateUserSquareAccount(ctx.user.id, {
-          accessToken: tokenData.accessToken,
-          refreshToken: tokenData.refreshToken,
-          merchantId: tokenData.merchantId,
-          locationId: defaultLocation,
-        });
-
-        // Squareをカード決済プロバイダーとして設定
-        await setCardPaymentProvider(ctx.user.id, 'square');
-
-        return { success: true, merchantId: tokenData.merchantId, locations };
+        return { success: true, message: 'Squareに接続しました', merchantId: testResult.merchantId };
       }),
 
-    // ロケーション設定
-    setLocation: adminProcedure
-      .input(z.object({ locationId: z.string() }))
-      .mutation(async ({ input, ctx }) => {
-        await updateUserSquareLocation(ctx.user.id, input.locationId);
-        return { success: true };
-      }),
-
-    // Square接続解除
+    // 接続解除
     disconnect: adminProcedure.mutation(async ({ ctx }) => {
-      const user = await getUserById(ctx.user.id);
-      if (user?.squareAccessToken) {
-        await revokeSquareToken(user.squareAccessToken);
-      }
       await disconnectUserSquare(ctx.user.id);
       
-      // カード決済プロバイダーをクリア
-      const updatedUser = await getUserById(ctx.user.id);
-      if (updatedUser?.cardPaymentProvider === 'square') {
+      const user = await getUserById(ctx.user.id);
+      if (user?.cardPaymentProvider === 'square') {
         await setCardPaymentProvider(ctx.user.id, null);
       }
 
@@ -523,18 +511,18 @@ export const appRouter = router({
     // 公開用: Square決済が有効か
     isPaymentEnabled: publicProcedure.query(async () => {
       const admin = await getAdminUser();
-      if (!admin || !admin.squareConnected || !admin.squareLocationId) {
+      if (!admin || !admin.squareConnected || !admin.squareAccessToken) {
         return { enabled: false, reason: 'Squareが接続されていません' };
       }
       return { enabled: true, reason: null };
     }),
 
-    // Square Checkout作成
+    // Checkout作成
     createCheckout: publicProcedure
       .input(z.object({ sessionToken: z.string() }))
       .mutation(async ({ input, ctx }) => {
         const admin = await getAdminUser();
-        if (!admin || !admin.squareConnected || !admin.squareAccessToken || !admin.squareLocationId) {
+        if (!admin || !admin.squareConnected || !admin.squareAccessToken) {
           throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Squareが接続されていません' });
         }
 
@@ -548,50 +536,40 @@ export const appRouter = router({
         }
 
         const exitTime = Date.now();
-        const { durationMinutes, amount } = calculateParkingFee(record.entryTime, exitTime);
+        const { durationMinutes, amount } = await calculateParkingFeeDynamic(record.entryTime, exitTime);
 
         const origin = ctx.req.headers.origin || 'http://localhost:3000';
-        const result = await createSquareCheckoutLink(
+
+        const result = await createSquareCheckout(
           admin.squareAccessToken,
-          admin.squareLocationId,
           amount,
           `${origin}/scan?payment=success&token=${input.sessionToken}`,
-          `${origin}/scan?payment=cancel&token=${input.sessionToken}`,
-          {
-            sessionToken: input.sessionToken,
-            spaceNumber: record.spaceNumber.toString(),
-          }
+          { spaceNumber: record.spaceNumber.toString() }
         );
 
         if (!result) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Square Checkoutの作成に失敗しました' });
         }
 
-        return {
-          checkoutUrl: result.checkoutUrl,
-          orderId: result.orderId,
-          amount,
-          durationMinutes,
-        };
+        return { checkoutUrl: result.url, orderId: result.orderId, amount, durationMinutes };
       }),
   }),
 
   // PayPay API
   paypay: router({
-    // PayPay接続状態取得
+    // 接続状態取得
     getConnectionStatus: adminProcedure.query(async ({ ctx }) => {
       const user = await getUserById(ctx.user.id);
       if (!user) {
-        return { connected: false, merchantId: null };
+        return { connected: false };
       }
-
       return {
         connected: user.paypayConnected,
         merchantId: user.paypayMerchantId,
       };
     }),
 
-    // PayPay API情報を保存
+    // 認証情報保存（接続テスト付き）
     saveCredentials: adminProcedure
       .input(z.object({
         apiKey: z.string().min(1),
@@ -600,21 +578,25 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         // 接続テスト
-        const testResult = await testPayPayConnection(input.apiKey, input.apiSecret, input.merchantId);
+        const testResult = await verifyPayPayCredentials(input.apiKey, input.apiSecret, input.merchantId);
         if (!testResult.success) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: testResult.message });
+          throw new TRPCError({ 
+            code: 'BAD_REQUEST', 
+            message: testResult.error || 'PayPay認証情報の検証に失敗しました' 
+          });
         }
 
+        // 保存
         await updateUserPayPayAccount(ctx.user.id, {
           apiKey: input.apiKey,
           apiSecret: input.apiSecret,
           merchantId: input.merchantId,
         });
 
-        return { success: true, message: testResult.message };
+        return { success: true, message: 'PayPayに接続しました' };
       }),
 
-    // PayPay接続解除
+    // 接続解除
     disconnect: adminProcedure.mutation(async ({ ctx }) => {
       await disconnectUserPayPay(ctx.user.id);
       return { success: true };
@@ -648,7 +630,7 @@ export const appRouter = router({
         }
 
         const exitTime = Date.now();
-        const { durationMinutes, amount } = calculateParkingFee(record.entryTime, exitTime);
+        const { durationMinutes, amount } = await calculateParkingFeeDynamic(record.entryTime, exitTime);
 
         const origin = ctx.req.headers.origin || 'http://localhost:3000';
         const orderId = `PARK-${record.id}-${Date.now()}`;
@@ -685,33 +667,31 @@ export const appRouter = router({
       const user = await getUserById(ctx.user.id);
       if (!user) {
         return {
-          stripe: { connected: false, onboardingComplete: false },
+          stripe: { connected: false },
           square: { connected: false },
           paypay: { connected: false },
           cardPaymentProvider: null,
+          pricing: { unitMinutes: 60, amount: 300 },
         };
-      }
-
-      let stripeOnboardingComplete = user.stripeOnboardingComplete;
-      if (user.stripeAccountId && !stripeOnboardingComplete) {
-        stripeOnboardingComplete = await isAccountReady(user.stripeAccountId);
       }
 
       return {
         stripe: {
-          connected: !!user.stripeAccountId,
-          onboardingComplete: stripeOnboardingComplete,
+          connected: user.stripeConnected,
         },
         square: {
           connected: user.squareConnected,
           merchantId: user.squareMerchantId,
-          locationId: user.squareLocationId,
         },
         paypay: {
           connected: user.paypayConnected,
           merchantId: user.paypayMerchantId,
         },
         cardPaymentProvider: user.cardPaymentProvider,
+        pricing: {
+          unitMinutes: user.pricingUnitMinutes,
+          amount: user.pricingAmount,
+        },
       };
     }),
 
@@ -724,32 +704,34 @@ export const appRouter = router({
           throw new TRPCError({ code: 'NOT_FOUND', message: 'ユーザーが見つかりません' });
         }
 
-        // 選択したプロバイダーが接続されているか確認
-        if (input.provider === 'stripe') {
-          if (!user.stripeAccountId || !user.stripeOnboardingComplete) {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Stripeが接続されていません' });
-          }
-        } else if (input.provider === 'square') {
-          if (!user.squareConnected) {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Squareが接続されていません' });
-          }
+        if (input.provider === 'stripe' && !user.stripeConnected) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Stripeが接続されていません' });
+        }
+        if (input.provider === 'square' && !user.squareConnected) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Squareが接続されていません' });
         }
 
         await setCardPaymentProvider(ctx.user.id, input.provider);
         return { success: true };
       }),
 
-    // Stripe接続解除
-    disconnectStripe: adminProcedure.mutation(async ({ ctx }) => {
-      await disconnectUserStripe(ctx.user.id);
-      
-      // カード決済プロバイダーをクリア
-      const user = await getUserById(ctx.user.id);
-      if (user?.cardPaymentProvider === 'stripe') {
-        await setCardPaymentProvider(ctx.user.id, null);
-      }
+    // 料金設定を更新
+    updatePricing: adminProcedure
+      .input(z.object({
+        unitMinutes: z.number().min(10).max(60),
+        amount: z.number().min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await updatePricingSettings(ctx.user.id, {
+          unitMinutes: input.unitMinutes,
+          amount: input.amount,
+        });
+        return { success: true };
+      }),
 
-      return { success: true };
+    // 料金設定を取得（公開用）
+    getPricing: publicProcedure.query(async () => {
+      return await getPricingSettings();
     }),
 
     // 公開用: 利用可能な決済方法一覧
@@ -761,10 +743,9 @@ export const appRouter = router({
 
       let cardProvider: 'stripe' | 'square' | null = null;
       
-      if (admin.cardPaymentProvider === 'stripe' && admin.stripeAccountId && admin.stripeOnboardingComplete) {
-        const accountReady = await isAccountReady(admin.stripeAccountId);
-        if (accountReady) cardProvider = 'stripe';
-      } else if (admin.cardPaymentProvider === 'square' && admin.squareConnected && admin.squareLocationId) {
+      if (admin.cardPaymentProvider === 'stripe' && admin.stripeConnected) {
+        cardProvider = 'stripe';
+      } else if (admin.cardPaymentProvider === 'square' && admin.squareConnected) {
         cardProvider = 'square';
       }
 

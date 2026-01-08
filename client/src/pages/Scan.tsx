@@ -291,7 +291,7 @@ function SpaceInfoView({
   onExitConfirm: () => void;
 }) {
   const { data, isLoading, error } = trpc.parking.getSpaceByQrCode.useQuery({ qrCode });
-  const enterMutation = trpc.parking.enter.useMutation({
+  const enterMutation = trpc.parking.checkIn.useMutation({
     onSuccess: (result) => {
       toast.success(`スペース${result.spaceNumber}番に入庫しました`);
       onEntrySuccess(result.sessionToken);
@@ -322,7 +322,9 @@ function SpaceInfoView({
 
   if (!data) return null;
 
-  const { space, canEnter, canExit } = data;
+  const { space, activeRecord, pricing } = data;
+  const canEnter = space.status === 'available';
+  const canExit = space.status === 'occupied' && activeRecord;
 
   return (
     <div className="space-y-6">
@@ -396,7 +398,7 @@ function EntrySuccessView({
   onExit: () => void;
   onHome: () => void;
 }) {
-  const { data } = trpc.parking.getRecordByToken.useQuery({ sessionToken });
+  const { data } = trpc.parking.getCheckoutInfo.useQuery({ sessionToken });
 
   return (
     <div className="space-y-6">
@@ -407,12 +409,12 @@ function EntrySuccessView({
           {data && (
             <>
               <p className="text-muted-foreground mb-4">
-                スペース {data.spaceNumber}番
+                スペース {data.record.spaceNumber}番
               </p>
               <div className="bg-background rounded-lg p-4 mb-6">
                 <p className="text-sm text-muted-foreground mb-1">入庫時刻</p>
                 <p className="text-2xl font-bold">
-                  {new Date(data.entryTime).toLocaleTimeString("ja-JP", {
+                  {new Date(data.record.entryTime).toLocaleTimeString("ja-JP", {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
@@ -447,7 +449,7 @@ function ExitConfirmView({
   onBack: () => void;
   onProceedPayment: () => void;
 }) {
-  const { data, isLoading } = trpc.parking.calculateExit.useQuery({ sessionToken });
+  const { data, isLoading } = trpc.parking.getCheckoutInfo.useQuery({ sessionToken });
 
   if (isLoading) {
     return (
@@ -543,15 +545,15 @@ function PaymentView({
   onBack: () => void;
 }) {
   const [paymentMethod, setPaymentMethod] = useState<"paypay" | "credit_card" | "stripe" | "square" | null>(null);
-  const { data } = trpc.parking.calculateExit.useQuery({ sessionToken });
+  const { data } = trpc.parking.getCheckoutInfo.useQuery({ sessionToken });
   const { data: availableMethods } = trpc.paymentSettings.getAvailableMethods.useQuery();
   
-  const paymentMutation = trpc.parking.processPayment.useMutation({
+  const paymentMutation = trpc.parking.checkOut.useMutation({
     onSuccess: () => {
       toast.success("決済が完了しました");
       onSuccess();
     },
-    onError: (err) => {
+    onError: (err: any) => {
       toast.error(err.message);
     },
   });
