@@ -294,6 +294,7 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
     { ownerId: 0 },
     { enabled: false }
   );
+  const utils = trpc.useUtils();
   const [formData, setFormData] = useState({
     totalSpaces: 10,
     pricingUnitMinutes: 60,
@@ -306,7 +307,7 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
     onSuccess: () => {
       toast.success('駐車場設定を更新しました');
       onOpenChange(false);
-      trpc.useUtils().operator.getAllParkingLots.invalidate();
+      utils.operator.getAllParkingLots.invalidate();
     },
     onError: (error: any) => {
       toast.error(error.message);
