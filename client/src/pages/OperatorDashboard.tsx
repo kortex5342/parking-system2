@@ -198,28 +198,147 @@ function OwnerDetailDialog({ userId, open, onOpenChange }: { userId: number | nu
 // 駐車場タブ
 function ParkingTab() {
   const { data: parkingLots } = trpc.operator.getAllParkingLots.useQuery();
+  const [selectedLot, setSelectedLot] = useState<number | null>(null);
 
   if (!parkingLots?.length) {
     return <div className="text-center py-8 text-muted-foreground">駐車場はまだ登録されていません</div>;
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {parkingLots.map((lot: any) => (
-        <Card key={lot.id}>
-          <CardHeader>
-            <CardTitle>{lot.name}</CardTitle>
-            <CardDescription>オーナー: {lot.ownerName}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 text-sm">
-              <p>スペース数: {lot.totalSpaces}</p>
-              <p>料金: ¥{lot.pricePerHour}/時間</p>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+    <>
+      <div className="grid gap-4 md:grid-cols-2">
+        {parkingLots.map((lot: any) => (
+          <Card key={lot.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedLot(lot.id)}>
+            <CardHeader>
+              <CardTitle>{lot.name}</CardTitle>
+              <CardDescription>オーナー: {lot.ownerName}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-sm">
+                <p>スペース数: {lot.totalSpaces}</p>
+                <p>料金: ¥{lot.pricePerHour}/時間</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      
+      <ParkingLotDetailDialog lotId={selectedLot} open={selectedLot !== null} onOpenChange={(open) => !open && setSelectedLot(null)} />
+    </>
+  );
+}
+
+// 駐車場詳細設定ダイアログ
+function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { data, isLoading } = trpc.operator.getParkingLotsByOwner.useQuery(
+    { ownerId: 0 },
+    { enabled: false }
+  );
+  const [formData, setFormData] = useState({
+    totalSpaces: 10,
+    pricingUnitMinutes: 60,
+    pricingAmount: 300,
+    maxDailyAmount: 3000,
+  });
+
+  const updateMutation = trpc.operator.updateParkingLot.useMutation({
+    onSuccess: () => {
+      toast.success('駐車場設定を更新しました');
+      onOpenChange(false);
+      trpc.useUtils().operator.getAllParkingLots.invalidate();
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (lotId) {
+      updateMutation.mutate({
+        lotId,
+        totalSpaces: formData.totalSpaces,
+        pricingUnitMinutes: formData.pricingUnitMinutes,
+        pricingAmount: formData.pricingAmount,
+        maxDailyAmount: formData.maxDailyAmount,
+      });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>駐車場設定</DialogTitle>
+          <DialogDescription>
+            駐車台数、料金設定、最大駐車料金を設定します。
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="totalSpaces">駐車台数（スペース数）</Label>
+            <Input
+              id="totalSpaces"
+              type="number"
+              min="1"
+              max="1000"
+              value={formData.totalSpaces}
+              onChange={(e) => setFormData({ ...formData, totalSpaces: parseInt(e.target.value) })}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="pricingUnitMinutes">料金計算単位（分）</Label>
+            <select
+              id="pricingUnitMinutes"
+              className="w-full px-3 py-2 border border-input rounded-md bg-background"
+              value={formData.pricingUnitMinutes}
+              onChange={(e) => setFormData({ ...formData, pricingUnitMinutes: parseInt(e.target.value) })}
+            >
+              <option value="30">30分</option>
+              <option value="60">1時間</option>
+              <option value="120">2時間</option>
+              <option value="240">4時間</option>
+              <option value="1440">1日</option>
+            </select>
+          </div>
+
+          <div>
+            <Label htmlFor="pricingAmount">料金金額（円）</Label>
+            <Input
+              id="pricingAmount"
+              type="number"
+              min="0"
+              step="10"
+              value={formData.pricingAmount}
+              onChange={(e) => setFormData({ ...formData, pricingAmount: parseInt(e.target.value) })}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="maxDailyAmount">最大駐車料金（1日の上限、円）</Label>
+            <Input
+              id="maxDailyAmount"
+              type="number"
+              min="0"
+              step="100"
+              value={formData.maxDailyAmount}
+              onChange={(e) => setFormData({ ...formData, maxDailyAmount: parseInt(e.target.value) })}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              キャンセル
+            </Button>
+            <Button type="submit" disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? '保存中...' : '保存'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
