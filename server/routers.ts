@@ -77,6 +77,7 @@ import {
   updateMaxPricingPeriod,
   deleteMaxPricingPeriod,
   deleteAllMaxPricingPeriodsForLot,
+  calculateParkingFeeWithTimePeriods,
 } from "./db";
 import {
   createPayPayQRCode,
@@ -316,7 +317,22 @@ export const appRouter = router({
         }
 
         const exitTime = Date.now();
-        const { durationMinutes, amount } = await calculateParkingFeeDynamic(record.entryTime, exitTime);
+        
+        // 駐車場に紐付く場合は時間帯ごとの最大料金を適用
+        let durationMinutes = 0;
+        let amount = 0;
+        
+        if (record.parkingLotId) {
+          const result = await calculateParkingFeeWithTimePeriods(record.parkingLotId, record.entryTime, exitTime);
+          durationMinutes = result.durationMinutes;
+          amount = result.amount;
+        } else {
+          // 駐車場に紐付かない場合は通常料金を計算
+          const result = await calculateParkingFeeDynamic(record.entryTime, exitTime);
+          durationMinutes = result.durationMinutes;
+          amount = result.amount;
+        }
+        
         const pricing = await getPricingSettings();
 
         return {

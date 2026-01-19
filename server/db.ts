@@ -1319,3 +1319,158 @@ export async function deleteAllMaxPricingPeriodsForLot(parkingLotId: number) {
 
   await db.delete(maxPricingPeriods).where(eq(maxPricingPeriods.parkingLotId, parkingLotId));
 }
+
+
+// ========== 複数の時間帯を跨ぐ料金計算ロジック（修正版）==========
+
+/**
+ * 複数の時間帯を跨ぐ駐車の料金計算（修正版）
+ * 入庫時点から24時間以内の駐車に対して、時間帯ごとの最大料金を適用
+ * 
+ * 仕様：入庫時刻から24時間以内の駐車に対して、その期間内の時間帯ごとの最大料金が適用される
+ * 最大料金は「その時間帯全体での最大料金」として適用される
+ * 
+ * @param lotId 駐車場ID
+ * @param entryTime 入庫時刻（UTC Unix timestamp ms）
+ * @param exitTime 出庫時刻（UTC Unix timestamp ms）
+ * @returns { durationMinutes: 駐車時間（分）, amount: 料金（円）}
+ */
+export async function calculateParkingFeeWithTimePeriods(
+  lotId: number,
+  entryTime: number,
+  exitTime: number
+): Promise<{ durationMinutes: number; amount: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // 駐車場の料金設定を取得
+  const lot = await getParkingLotById(lotId);
+  if (!lot) throw new Error("Parking lot not found");
+
+  const unitMinutes = lot.pricingUnitMinutes || 60;
+  const unitAmount = lot.pricingAmount || 300;
+
+  // 時間帯ごとの最大料金を取得
+  const timePeriods = await getMaxPricingPeriodsByLot(lotId);
+
+  // 駐車時間を計算
+  const durationMs = exitTime - entryTime;
+  const durationMinutes = Math.ceil(durationMs / (1000 * 60));
+
+  // 時間帯設定がない場合は通常料金を計算
+  if (timePeriods.length === 0) {
+    const units = Math.ceil(durationMinutes / unitMinutes);
+    const amount = units * unitAmount;
+    return { durationMinutes, amount };
+  }
+
+  // 24時間以内の駐車かどうかを判定
+  const isWithin24Hours = durationMs <= 24 * 60 * 60 * 1000;
+
+  let totalAmount = 0;
+
+  if (isWithin24Hours) {
+    // 24時間以内の駐車：時間帯ごとに駐車時間を集計してから料金を計算
+    // 各時間帯の駐車時間を集計
+    const timePeriodDurations: { [key: number]: number } = {};
+    
+    let currentTime = new Date(entryTime);
+    const exitDateTime = new Date(exitTime);
+    
+    while (currentTime < exitDateTime) {
+      // 現在の時刻（日本時間 UTC+9）
+      const currentHour = (currentTime.getUTCHours() + 9) % 24;
+      
+      // 次の時間帯の開始時刻を計算
+      let nextTime = new Date(currentTime);
+      nextTime.setUTCHours(nextTime.getUTCHours() + 1);
+      
+      // 日付が変わった場合の処理
+      if (nextTime.getUTCHours() === 0 && currentTime.getUTCHours() === 23) {
+        nextTime.setUTCDate(nextTime.getUTCDate() + 1);
+      }
+      
+      // 出庫時刻を超えないようにする
+      if (nextTime > exitDateTime) {
+        nextTime = new Date(exitDateTime);
+      }
+      
+      // この時間帯の駐車時間を計算
+      const periodDurationMs = nextTime.getTime() - currentTime.getTime();
+      const periodDurationMinutes = Math.ceil(periodDurationMs / (1000 * 60));
+      
+      // 適用される時間帯を特定
+      const applicableTimePeriod = timePeriods.find(period => {
+        // 時間帯が日付をまたぐ場合（例：19時～5時）
+        if (period.startHour > period.endHour) {
+          return currentHour >= period.startHour || currentHour < period.endHour;
+        }
+        // 通常の時間帯（例：5時～19時）
+        return currentHour >= period.startHour && currentHour < period.endHour;
+      });
+      
+      // 時間帯ごとの駐車時間を集計
+      if (applicableTimePeriod) {
+        const key = applicableTimePeriod.id;
+        timePeriodDurations[key] = (timePeriodDurations[key] || 0) + periodDurationMinutes;
+      }
+      
+      currentTime = nextTime;
+    }
+    
+    // 時間帯ごとに料金を計算して合計
+    for (const period of timePeriods) {
+      const durationMinutes = timePeriodDurations[period.id] || 0;
+      
+      if (durationMinutes > 0) {
+        // この時間帯の通常料金を計算
+        const units = Math.ceil(durationMinutes / unitMinutes);
+        let periodAmount = units * unitAmount;
+        
+        // この時間帯の最大料金を適用
+        periodAmount = Math.min(periodAmount, period.maxAmount);
+        
+        totalAmount += periodAmount;
+      }
+    }
+  } else {
+    // 24時間を超える駐車：24時間ごとに分割して計算
+    let currentTime = new Date(entryTime);
+    const exitDateTime = new Date(exitTime);
+    
+    while (currentTime < exitDateTime) {
+      // 次の24時間後の時刻を計算
+      let next24HourTime = new Date(currentTime);
+      next24HourTime.setUTCHours(next24HourTime.getUTCHours() + 24);
+      
+      // 出庫時刻を超えないようにする
+      if (next24HourTime > exitDateTime) {
+        next24HourTime = new Date(exitDateTime);
+      }
+      
+      // この24時間の駐車時間を計算
+      const periodDurationMs = next24HourTime.getTime() - currentTime.getTime();
+      const periodDurationMinutes = Math.ceil(periodDurationMs / (1000 * 60));
+      
+      // この24時間の通常料金を計算
+      const units = Math.ceil(periodDurationMinutes / unitMinutes);
+      let periodAmount = units * unitAmount;
+      
+      // 最大料金を適用（24時間分の最大料金）
+      // 複数の時間帯がある場合は、その合計を計算
+      let maxAmountFor24Hours = 0;
+      for (const period of timePeriods) {
+        maxAmountFor24Hours += period.maxAmount;
+      }
+      
+      if (maxAmountFor24Hours > 0) {
+        periodAmount = Math.min(periodAmount, maxAmountFor24Hours);
+      }
+      
+      totalAmount += periodAmount;
+      currentTime = next24HourTime;
+    }
+  }
+
+  return { durationMinutes, amount: totalAmount };
+}
