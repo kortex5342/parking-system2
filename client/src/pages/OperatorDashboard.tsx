@@ -302,7 +302,13 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
     pricingAmount: 300,
     maxDailyAmount: 3000,
     maxDailyAmountEnabled: true,
+    timePeriodsEnabled: true,
   });
+
+  const [timePeriods, setTimePeriods] = useState([
+    { startHour: 5, endHour: 19, maxAmount: 3000 },
+    { startHour: 19, endHour: 5, maxAmount: 1300 },
+  ]);
 
   const updateMutation = trpc.operator.updateParkingLot.useMutation({
     onSuccess: () => {
@@ -432,9 +438,21 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
 
           {/* 時間帯ごとの最大料金セクション */}
           <div className="border-t pt-4 mt-4">
+            <div className="flex items-center gap-2 mb-4">
+              <input
+                id="timePeriodsEnabled"
+                type="checkbox"
+                checked={formData.timePeriodsEnabled}
+                onChange={(e) => setFormData({ ...formData, timePeriodsEnabled: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <Label htmlFor="timePeriodsEnabled" className="font-normal">時間帯ごとの最大料金設定を有効にする</Label>
+            </div>
             <h3 className="font-semibold mb-4">時間帯ごとの最大料金設定</h3>
             
-            {/* 昼間設定 */}
+            {formData.timePeriodsEnabled && (
+            <>
+            {/* 昔間設定 */}
             <div className="space-y-3 mb-4 p-3 border rounded-md bg-muted/50">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm">昼間：</span>
@@ -481,6 +499,8 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
                 </select>
               </div>
             </div>
+            </>
+            )}
           </div>
 
           <DialogFooter>
