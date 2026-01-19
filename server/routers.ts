@@ -1052,6 +1052,7 @@ export const appRouter = router({
             role: user.role,
             status: user.status,
             createdAt: user.createdAt,
+            customUrl: user.customUrl,
           },
           parkingLots,
           salesSummary,
