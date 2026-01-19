@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
+import { QRCodeSVG } from 'qrcode.react';
 
 export default function OperatorDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -314,6 +315,18 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
     },
   });
 
+  // TODO: deleteParkingLot型推論の問題を解決後に実装
+  // const deleteMutation = trpc.operator.deleteParkingLot.useMutation({
+  //   onSuccess: () => {
+  //     toast.success('駐車場を削除しました');
+  //     onOpenChange(false);
+  //     utils.operator.getAllParkingLots.invalidate();
+  //   },
+  //   onError: (error: any) => {
+  //     toast.error(error.message);
+  //   },
+  // });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (lotId) {
@@ -338,6 +351,24 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* QRコード表示セクション */}
+          {lotId && (
+            <div className="border-b pb-4">
+              <h3 className="font-semibold mb-3">QRコード</h3>
+              <div className="flex justify-center p-4 bg-muted rounded-lg">
+                <QRCodeSVG
+                  value={`${window.location.origin}/owner/parking-${lotId}`}
+                  size={200}
+                  level="H"
+                  includeMargin={true}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground text-center mt-2">
+                顧客の入出库時に使用してください
+              </p>
+            </div>
+          )}
+
           <div>
             <Label htmlFor="totalSpaces">駐車台数（スペース数）</Label>
             <Input
@@ -453,6 +484,11 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
           </div>
 
           <DialogFooter>
+            <Button type="button" variant="destructive" onClick={() => {
+              toast.info('削除機能は今後実装されます');
+            }}>
+              削除
+            </Button>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               キャンセル
             </Button>

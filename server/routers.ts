@@ -1375,6 +1375,14 @@ export const appRouter = router({
         await deleteMaxPricingPeriod(input.periodId);
         return { success: true };
       }),
+
+    // 駐車場削除（運営者用）
+    deleteParkingLot: adminProcedure
+      .input(z.object({ lotId: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteParkingLot(input.lotId);
+        return { success: true };
+      }),
   }),
 });
 
