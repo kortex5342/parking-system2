@@ -387,14 +387,55 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
 
           {/* 時間帯ごとの最大料金セクション */}
           <div className="border-t pt-4 mt-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold">時間帯ごとの最大料金</h3>
-              <Button type="button" variant="outline" size="sm">
-                追加
-              </Button>
+            <h3 className="font-semibold mb-4">時間帯ごとの最大料金設定</h3>
+            
+            {/* 昼間設定 */}
+            <div className="space-y-3 mb-4 p-3 border rounded-md bg-muted/50">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm">昼間：</span>
+                <select className="px-2 py-1 border rounded text-sm" defaultValue="9">
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>{i}時</option>
+                  ))}
+                </select>
+                <span className="text-sm">から</span>
+                <select className="px-2 py-1 border rounded text-sm" defaultValue="18">
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>{i}時</option>
+                  ))}
+                </select>
+                <span className="text-sm">まで、最大料金</span>
+                <select className="px-2 py-1 border rounded text-sm" defaultValue="3000">
+                  {Array.from({ length: 100 }, (_, i) => (
+                    <option key={i} value={(i + 1) * 100}>¥{(i + 1) * 100}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">例：19時～5時は最大1300円、5時～19時は最大3000円</p>
-            <MaxPricingPeriodsTable lotId={lotId} />
+            
+            {/* 夜間設定 */}
+            <div className="space-y-3 p-3 border rounded-md bg-muted/50">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm">夜間：</span>
+                <select className="px-2 py-1 border rounded text-sm" defaultValue="18">
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>{i}時</option>
+                  ))}
+                </select>
+                <span className="text-sm">から</span>
+                <select className="px-2 py-1 border rounded text-sm" defaultValue="9">
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>{i}時</option>
+                  ))}
+                </select>
+                <span className="text-sm">まで、最大料金</span>
+                <select className="px-2 py-1 border rounded text-sm" defaultValue="1300">
+                  {Array.from({ length: 100 }, (_, i) => (
+                    <option key={i} value={(i + 1) * 100}>¥{(i + 1) * 100}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
           <DialogFooter>
