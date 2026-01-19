@@ -81,11 +81,6 @@ export default function OwnerDashboard() {
             </div>
             <div className="flex items-center gap-4">
               <span className="text-sm text-muted-foreground">{user?.name || user?.email}</span>
-              {user?.role === 'admin' && (
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/operator">運営管理</Link>
-                </Button>
-              )}
             </div>
           </div>
         </div>

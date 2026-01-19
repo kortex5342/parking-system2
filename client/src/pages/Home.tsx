@@ -1,6 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Car, QrCode, CreditCard, Shield, Building2, Users } from "lucide-react";
+import { Car, QrCode, CreditCard, Shield, Building2 } from "lucide-react";
 import { Link } from "wouter";
 import { getLoginUrl } from "@/const";
 
@@ -35,14 +35,7 @@ export default function Home() {
                     </Button>
                   </Link>
                 )}
-                {user?.role === 'admin' && (
-                  <Link href="/operator">
-                    <Button variant="default">
-                      <Users className="w-4 h-4 mr-2" />
-                      運営管理
-                    </Button>
-                  </Link>
-                )}
+
                 {user?.role === 'user' && (
                   <Link href="/owner">
                     <Button variant="default">オーナー登録</Button>
