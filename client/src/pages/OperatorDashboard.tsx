@@ -306,8 +306,8 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
   });
 
   const [timePeriods, setTimePeriods] = useState([
-    { startHour: 5, endHour: 19, maxAmount: 3000 },
-    { startHour: 19, endHour: 5, maxAmount: 1300 },
+    { startHour: 5, endHour: 19, maxAmount: 3000, enabled: true },
+    { startHour: 19, endHour: 5, maxAmount: 1300, enabled: true },
   ]);
 
   const updateMutation = trpc.operator.updateParkingLot.useMutation({
@@ -454,6 +454,20 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
             <>
             {/* 昔間設定 */}
             <div className="space-y-3 mb-4 p-3 border rounded-md bg-muted/50">
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  id="dayTimeEnabled"
+                  type="checkbox"
+                  checked={timePeriods[0]?.enabled ?? true}
+                  onChange={(e) => {
+                    const newPeriods = [...timePeriods];
+                    newPeriods[0] = { ...newPeriods[0], enabled: e.target.checked };
+                    setTimePeriods(newPeriods);
+                  }}
+                  className="w-4 h-4"
+                />
+                <Label htmlFor="dayTimeEnabled" className="font-normal">昔間設定を有効にする</Label>
+              </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm">昼間：</span>
                 <select className="px-2 py-1 border rounded text-sm" defaultValue="9">
@@ -478,6 +492,20 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
             
             {/* 夜間設定 */}
             <div className="space-y-3 p-3 border rounded-md bg-muted/50">
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  id="nightTimeEnabled"
+                  type="checkbox"
+                  checked={timePeriods[1]?.enabled ?? true}
+                  onChange={(e) => {
+                    const newPeriods = [...timePeriods];
+                    newPeriods[1] = { ...newPeriods[1], enabled: e.target.checked };
+                    setTimePeriods(newPeriods);
+                  }}
+                  className="w-4 h-4"
+                />
+                <Label htmlFor="nightTimeEnabled" className="font-normal">夜間設定を有効にする</Label>
+              </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm">夜間：</span>
                 <select className="px-2 py-1 border rounded text-sm" defaultValue="18">
@@ -660,8 +688,8 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
   });
 
   const [timePeriods, setTimePeriods] = useState([
-    { startHour: 5, endHour: 19, maxAmount: 3000 },
-    { startHour: 19, endHour: 5, maxAmount: 1300 },
+    { startHour: 5, endHour: 19, maxAmount: 3000, enabled: true },
+    { startHour: 19, endHour: 5, maxAmount: 1300, enabled: true },
   ]);
 
   const utils = trpc.useUtils();
@@ -691,8 +719,8 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
             timePeriodsEnabled: true,
           });
           setTimePeriods([
-            { startHour: 5, endHour: 19, maxAmount: 3000 },
-            { startHour: 19, endHour: 5, maxAmount: 1300 },
+            { startHour: 5, endHour: 19, maxAmount: 3000, enabled: true },
+            { startHour: 19, endHour: 5, maxAmount: 1300, enabled: true },
           ]);
           onOpenChange(false);
           utils.operator.getOwnerDetail.invalidate();
@@ -714,8 +742,8 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
           timePeriodsEnabled: true,
         });
         setTimePeriods([
-          { startHour: 5, endHour: 19, maxAmount: 3000 },
-          { startHour: 19, endHour: 5, maxAmount: 1300 },
+          { startHour: 5, endHour: 19, maxAmount: 3000, enabled: true },
+          { startHour: 19, endHour: 5, maxAmount: 1300, enabled: true },
         ]);
         onOpenChange(false);
         utils.operator.getOwnerDetail.invalidate();
@@ -892,6 +920,20 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
             
             {/* 夜間設定 */}
             <div className="space-y-3 p-3 border rounded-md bg-muted/50">
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  id="nightTimeEnabled"
+                  type="checkbox"
+                  checked={timePeriods[1]?.enabled ?? true}
+                  onChange={(e) => {
+                    const newPeriods = [...timePeriods];
+                    newPeriods[1] = { ...newPeriods[1], enabled: e.target.checked };
+                    setTimePeriods(newPeriods);
+                  }}
+                  className="w-4 h-4"
+                />
+                <Label htmlFor="nightTimeEnabled" className="font-normal">夜間設定を有効にする</Label>
+              </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm">夜間：</span>
                 <select 
