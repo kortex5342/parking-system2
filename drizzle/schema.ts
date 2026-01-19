@@ -174,3 +174,20 @@ export const payoutSchedules = mysqlTable("payoutSchedules", {
 
 export type PayoutSchedule = typeof payoutSchedules.$inferSelect;
 export type InsertPayoutSchedule = typeof payoutSchedules.$inferInsert;
+
+/**
+ * 時間帯ごとの最大料金テーブル
+ * 例：19時～5時は最大1300円、5時～19時は最大3000円
+ */
+export const maxPricingPeriods = mysqlTable("max_pricing_periods", {
+  id: int("id").autoincrement().primaryKey(),
+  parkingLotId: int("parkingLotId").notNull().references(() => parkingLots.id, { onDelete: "cascade" }),
+  startHour: int("startHour").notNull(),
+  endHour: int("endHour").notNull(),
+  maxAmount: int("maxAmount").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type MaxPricingPeriod = typeof maxPricingPeriods.$inferSelect;
+export type InsertMaxPricingPeriod = typeof maxPricingPeriods.$inferInsert;

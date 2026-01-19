@@ -1256,3 +1256,66 @@ export async function checkCustomUrlExists(customUrl: string): Promise<boolean> 
     return false;
   }
 }
+
+
+// ========== 時間帯ごとの最大料金管理 ==========
+
+import { maxPricingPeriods, InsertMaxPricingPeriod, MaxPricingPeriod } from "../drizzle/schema";
+
+// 時間帯ごとの最大料金を保存
+export async function saveMaxPricingPeriod(data: {
+  parkingLotId: number;
+  startHour: number;
+  endHour: number;
+  maxAmount: number;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(maxPricingPeriods).values({
+    parkingLotId: data.parkingLotId,
+    startHour: data.startHour,
+    endHour: data.endHour,
+    maxAmount: data.maxAmount,
+  });
+
+  return Number(result[0].insertId);
+}
+
+// 駐車場の時間帯ごとの最大料金一覧取得
+export async function getMaxPricingPeriodsByLot(parkingLotId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(maxPricingPeriods)
+    .where(eq(maxPricingPeriods.parkingLotId, parkingLotId))
+    .orderBy(maxPricingPeriods.startHour);
+}
+
+// 時間帯ごとの最大料金を更新
+export async function updateMaxPricingPeriod(periodId: number, data: {
+  startHour?: number;
+  endHour?: number;
+  maxAmount?: number;
+}) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(maxPricingPeriods).set(data).where(eq(maxPricingPeriods.id, periodId));
+}
+
+// 時間帯ごとの最大料金を削除
+export async function deleteMaxPricingPeriod(periodId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.delete(maxPricingPeriods).where(eq(maxPricingPeriods.id, periodId));
+}
+
+// 駐車場の時間帯ごとの最大料金をすべて削除
+export async function deleteAllMaxPricingPeriodsForLot(parkingLotId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.delete(maxPricingPeriods).where(eq(maxPricingPeriods.parkingLotId, parkingLotId));
+}

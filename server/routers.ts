@@ -72,6 +72,11 @@ import {
   getPayoutSchedulesByLot,
   createPayoutSchedule,
   updatePayoutSchedule,
+  saveMaxPricingPeriod,
+  getMaxPricingPeriodsByLot,
+  updateMaxPricingPeriod,
+  deleteMaxPricingPeriod,
+  deleteAllMaxPricingPeriodsForLot,
 } from "./db";
 import {
   createPayPayQRCode,
@@ -1307,6 +1312,48 @@ export const appRouter = router({
           throw new TRPCError({ code: 'CONFLICT', message: 'このカスタムURLは既に使用されています' });
         }
         await updateOwnerCustomUrl(input.ownerId, input.customUrl);
+        return { success: true };
+      }),
+
+    // 時間帯ごとの最大料金一覧取得
+    getMaxPricingPeriods: adminProcedure
+      .input(z.object({ parkingLotId: z.number() }))
+      .query(async ({ input }) => {
+        return await getMaxPricingPeriodsByLot(input.parkingLotId);
+      }),
+
+    // 時間帯ごとの最大料金を保存
+    saveMaxPricingPeriod: adminProcedure
+      .input(z.object({
+        parkingLotId: z.number(),
+        startHour: z.number().min(0).max(23),
+        endHour: z.number().min(0).max(23),
+        maxAmount: z.number().min(0),
+      }))
+      .mutation(async ({ input }) => {
+        const periodId = await saveMaxPricingPeriod(input);
+        return { success: true, periodId };
+      }),
+
+    // 時間帯ごとの最大料金を更新
+    updateMaxPricingPeriod: adminProcedure
+      .input(z.object({
+        periodId: z.number(),
+        startHour: z.number().min(0).max(23).optional(),
+        endHour: z.number().min(0).max(23).optional(),
+        maxAmount: z.number().min(0).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { periodId, ...updateData } = input;
+        await updateMaxPricingPeriod(periodId, updateData);
+        return { success: true };
+      }),
+
+    // 時間帯ごとの最大料金を削除
+    deleteMaxPricingPeriod: adminProcedure
+      .input(z.object({ periodId: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteMaxPricingPeriod(input.periodId);
         return { success: true };
       }),
   }),
