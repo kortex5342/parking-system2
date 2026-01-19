@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState } from 'react';
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,9 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { getLoginUrl } from "@/const";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Copy, Plus } from "lucide-react";
 
 export default function OperatorDashboard() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
@@ -248,7 +251,7 @@ function PendingTab() {
       utils.operator.getAllOwners.invalidate();
       utils.operator.getTotalSummary.invalidate();
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast.error(error.message);
     },
   });
@@ -258,7 +261,7 @@ function PendingTab() {
       toast.success('申請を却下しました');
       utils.operator.getPendingOwners.invalidate();
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast.error(error.message);
     },
   });
@@ -347,7 +350,7 @@ function OwnersTab() {
       toast.success('オーナーを有効化しました');
       utils.operator.getAllOwners.invalidate();
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast.error(error.message);
     },
   });
@@ -357,7 +360,7 @@ function OwnersTab() {
       toast.success('オーナーを停止しました');
       utils.operator.getAllOwners.invalidate();
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast.error(error.message);
     },
   });
@@ -639,6 +642,104 @@ function ParkingLotsTab() {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+
+// 新規オーナー追加セクション
+function AddOwnerSection() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    customUrl: '',
+  });
+  const utils = trpc.useUtils();
+
+  const addOwnerMutation = trpc.operator.addOwner.useMutation({
+    onSuccess: () => {
+      toast.success('オーナーを追加しました');
+      setFormData({ name: '', email: '', customUrl: '' });
+      setIsOpen(false);
+      utils.operator.getAllOwners.invalidate();
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.email || !formData.customUrl) {
+      toast.error('すべてのフィールドを入力してください');
+      return;
+    }
+    addOwnerMutation.mutate(formData);
+  };
+
+  return (
+    <div className="mt-8">
+      <Button onClick={() => setIsOpen(true)} size="lg" className="w-full">
+        <Plus className="mr-2 h-4 w-4" />
+        新規オーナーを追加
+      </Button>
+
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>新規オーナーを追加</DialogTitle>
+            <DialogDescription>
+              新しいオーナーを登録します。カスタムURLは一意である必要があります。
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="name">オーナー名</Label>
+              <Input
+                id="name"
+                placeholder="例：山田太郎"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="email">メールアドレス</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="example@example.com"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="customUrl">カスタムURL</Label>
+              <div className="flex gap-2">
+                <span className="text-sm text-muted-foreground pt-2">/owner/</span>
+                <Input
+                  id="customUrl"
+                  placeholder="parking-lot-a"
+                  value={formData.customUrl}
+                  onChange={(e) => setFormData({ ...formData, customUrl: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+                キャンセル
+              </Button>
+              <Button type="submit" disabled={addOwnerMutation.isPending}>
+                {addOwnerMutation.isPending ? '追加中...' : '追加'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

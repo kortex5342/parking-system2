@@ -1239,6 +1239,22 @@ export const appRouter = router({
         return owner;
       }),
 
+    // 新規オーナー追加（addOwnerエイリアス）
+    addOwner: adminProcedure
+      .input(z.object({
+        name: z.string(),
+        email: z.string().email(),
+        customUrl: z.string().min(3).max(100),
+      }))
+      .mutation(async ({ input }) => {
+        const exists = await checkCustomUrlExists(input.customUrl);
+        if (exists) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'このカスタムURLは既に使用されています' });
+        }
+        await createOwner(input);
+        return { success: true, customUrl: input.customUrl };
+      }),
+
     // カスタムURLの変更
     updateOwnerCustomUrl: adminProcedure
       .input(z.object({
