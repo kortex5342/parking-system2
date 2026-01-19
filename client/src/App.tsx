@@ -8,14 +8,21 @@ import Home from "./pages/Home";
 import Scan from "./pages/Scan";
 import Admin from "./pages/Admin";
 import PrintQR from "./pages/PrintQR";
+import OwnerDashboard from "./pages/OwnerDashboard";
+import OperatorDashboard from "./pages/OperatorDashboard";
+import OwnerLotQR from "./pages/OwnerLotQR";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/scan" component={Scan} />
+      <Route path="/scan/:lotId/:spaceNumber" component={Scan} />
       <Route path="/admin" component={Admin} />
       <Route path="/admin/print-qr" component={PrintQR} />
+      <Route path="/owner" component={OwnerDashboard} />
+      <Route path="/owner/lot/:lotId/qr" component={OwnerLotQR} />
+      <Route path="/operator" component={OperatorDashboard} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

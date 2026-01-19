@@ -126,6 +126,21 @@ export async function getParkingSpaceByQrCode(qrCode: string) {
   const db = await getDb();
   if (!db) return null;
 
+  // LOT-{lotId}-SPACE-{spaceNumber} 形式の場合
+  const lotSpaceMatch = qrCode.match(/^LOT-(\d+)-SPACE-(\d+)$/);
+  if (lotSpaceMatch) {
+    const lotId = parseInt(lotSpaceMatch[1]);
+    const spaceNumber = parseInt(lotSpaceMatch[2]);
+    const result = await db.select().from(parkingSpaces)
+      .where(and(
+        eq(parkingSpaces.parkingLotId, lotId),
+        eq(parkingSpaces.spaceNumber, spaceNumber)
+      ))
+      .limit(1);
+    return result.length > 0 ? result[0] : null;
+  }
+
+  // 通常のQRコード形式
   const result = await db.select().from(parkingSpaces).where(eq(parkingSpaces.qrCode, qrCode)).limit(1);
   return result.length > 0 ? result[0] : null;
 }
@@ -592,4 +607,361 @@ export async function calculateParkingFeeDynamic(entryTime: number, exitTime: nu
   const amount = units * pricing.amount;
   
   return { durationMinutes, amount };
+}
+
+
+// ========== マルチテナント対応 ==========
+
+import { parkingLots, InsertParkingLot, ParkingLot } from "../drizzle/schema";
+
+// ========== オーナー管理 ==========
+
+// オーナーとして登録申請
+export async function registerAsOwner(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    role: 'owner',
+    status: 'pending', // 承認待ち
+  }).where(eq(users.id, userId));
+}
+
+// オーナー申請を承認
+export async function approveOwner(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    status: 'active',
+  }).where(eq(users.id, userId));
+}
+
+// オーナーを停止
+export async function suspendOwner(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ 
+    status: 'suspended',
+  }).where(eq(users.id, userId));
+}
+
+// 全オーナー一覧取得
+export async function getAllOwners() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(users)
+    .where(eq(users.role, 'owner'))
+    .orderBy(desc(users.createdAt));
+}
+
+// 承認待ちオーナー一覧取得
+export async function getPendingOwners() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(users)
+    .where(and(eq(users.role, 'owner'), eq(users.status, 'pending')))
+    .orderBy(desc(users.createdAt));
+}
+
+// ========== 駐車場管理 ==========
+
+// 駐車場作成
+export async function createParkingLot(data: {
+  ownerId: number;
+  name: string;
+  address?: string;
+  description?: string;
+  totalSpaces?: number;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(parkingLots).values({
+    ownerId: data.ownerId,
+    name: data.name,
+    address: data.address || null,
+    description: data.description || null,
+    totalSpaces: data.totalSpaces || 10,
+    status: 'active',
+  });
+
+  return Number(result[0].insertId);
+}
+
+// オーナーの駐車場一覧取得
+export async function getParkingLotsByOwner(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(parkingLots)
+    .where(eq(parkingLots.ownerId, ownerId))
+    .orderBy(desc(parkingLots.createdAt));
+}
+
+// 駐車場取得
+export async function getParkingLotById(lotId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(parkingLots)
+    .where(eq(parkingLots.id, lotId))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+// 駐車場更新
+export async function updateParkingLot(lotId: number, data: {
+  name?: string;
+  address?: string;
+  description?: string;
+  totalSpaces?: number;
+  pricingUnitMinutes?: number;
+  pricingAmount?: number;
+  maxDailyAmount?: number;
+  status?: 'active' | 'inactive';
+}) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(parkingLots).set(data).where(eq(parkingLots.id, lotId));
+}
+
+// 駐車場削除（論理削除）
+export async function deleteParkingLot(lotId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(parkingLots).set({ status: 'inactive' }).where(eq(parkingLots.id, lotId));
+}
+
+// 全駐車場一覧取得（運営者用）
+export async function getAllParkingLots() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(parkingLots)
+    .orderBy(desc(parkingLots.createdAt));
+}
+
+// ========== 駐車スペース管理（駐車場紐付け） ==========
+
+// 駐車場用の駐車スペースを初期化
+export async function initializeParkingSpacesForLot(lotId: number, totalSpaces: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  for (let i = 1; i <= totalSpaces; i++) {
+    const qrCode = `LOT${lotId}-PARK-${i.toString().padStart(2, '0')}-${nanoid(8)}`;
+    try {
+      await db.insert(parkingSpaces).values({
+        parkingLotId: lotId,
+        spaceNumber: i,
+        status: "available",
+        qrCode,
+      });
+    } catch (error) {
+      console.error(`Failed to create parking space ${i} for lot ${lotId}:`, error);
+    }
+  }
+}
+
+// 駐車場の駐車スペース一覧取得
+export async function getParkingSpacesByLot(lotId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(parkingSpaces)
+    .where(eq(parkingSpaces.parkingLotId, lotId))
+    .orderBy(parkingSpaces.spaceNumber);
+}
+
+// ========== 入庫記録（駐車場紐付け） ==========
+
+// 入庫記録作成（駐車場紐付け）
+export async function createParkingRecordForLot(
+  lotId: number,
+  spaceId: number, 
+  spaceNumber: number
+): Promise<string> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const sessionToken = nanoid(32);
+  const entryTime = Date.now();
+
+  await db.insert(parkingRecords).values({
+    parkingLotId: lotId,
+    spaceId,
+    spaceNumber,
+    entryTime,
+    status: "active",
+    sessionToken,
+  });
+
+  // スペースを使用中に更新
+  await updateParkingSpaceStatus(spaceId, "occupied");
+
+  return sessionToken;
+}
+
+// 駐車場のアクティブ入庫記録取得
+export async function getActiveParkingRecordsByLot(lotId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(parkingRecords)
+    .where(and(
+      eq(parkingRecords.parkingLotId, lotId),
+      eq(parkingRecords.status, "active")
+    ))
+    .orderBy(parkingRecords.spaceNumber);
+}
+
+// ========== 決済記録（オーナー紐付け） ==========
+
+// 決済記録作成（オーナー紐付け）
+export async function createPaymentRecordForOwner(data: {
+  parkingLotId: number;
+  ownerId: number;
+  parkingRecordId: number;
+  spaceNumber: number;
+  entryTime: number;
+  exitTime: number;
+  durationMinutes: number;
+  amount: number;
+  paymentMethod: "paypay" | "credit_card" | "stripe" | "square";
+  stripePaymentIntentId?: string;
+  squarePaymentId?: string;
+  paypayPaymentId?: string;
+  isDemo: boolean;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const transactionId = data.isDemo ? `TXN-${nanoid(16)}` : undefined;
+
+  const result = await db.insert(paymentRecords).values({
+    parkingLotId: data.parkingLotId,
+    ownerId: data.ownerId,
+    parkingRecordId: data.parkingRecordId,
+    spaceNumber: data.spaceNumber,
+    entryTime: data.entryTime,
+    exitTime: data.exitTime,
+    durationMinutes: data.durationMinutes,
+    amount: data.amount,
+    paymentMethod: data.paymentMethod,
+    paymentStatus: "pending",
+    transactionId,
+    stripePaymentIntentId: data.stripePaymentIntentId,
+    squarePaymentId: data.squarePaymentId,
+    paypayPaymentId: data.paypayPaymentId,
+    isDemo: data.isDemo,
+  });
+
+  return Number(result[0].insertId);
+}
+
+// オーナーの決済履歴取得
+export async function getPaymentRecordsByOwner(ownerId: number, limit: number = 100) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(paymentRecords)
+    .where(eq(paymentRecords.ownerId, ownerId))
+    .orderBy(desc(paymentRecords.createdAt))
+    .limit(limit);
+}
+
+// 駐車場の決済履歴取得
+export async function getPaymentRecordsByLot(lotId: number, limit: number = 100) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(paymentRecords)
+    .where(eq(paymentRecords.parkingLotId, lotId))
+    .orderBy(desc(paymentRecords.createdAt))
+    .limit(limit);
+}
+
+// ========== 売上集計 ==========
+
+// オーナーの売上集計
+export async function getOwnerSalesSummary(ownerId: number) {
+  const db = await getDb();
+  if (!db) return { totalAmount: 0, totalTransactions: 0 };
+
+  const records = await db.select().from(paymentRecords)
+    .where(and(
+      eq(paymentRecords.ownerId, ownerId),
+      eq(paymentRecords.paymentStatus, 'completed')
+    ));
+
+  const totalAmount = records.reduce((sum, r) => sum + r.amount, 0);
+  const totalTransactions = records.length;
+
+  return { totalAmount, totalTransactions };
+}
+
+// 全体の売上集計（運営者用）
+export async function getTotalSalesSummary() {
+  const db = await getDb();
+  if (!db) return { totalAmount: 0, totalTransactions: 0, totalOwners: 0, totalParkingLots: 0 };
+
+  const records = await db.select().from(paymentRecords)
+    .where(eq(paymentRecords.paymentStatus, 'completed'));
+
+  const owners = await db.select().from(users)
+    .where(eq(users.role, 'owner'));
+
+  const lots = await db.select().from(parkingLots);
+
+  const totalAmount = records.reduce((sum, r) => sum + r.amount, 0);
+  const totalTransactions = records.length;
+  const totalOwners = owners.length;
+  const totalParkingLots = lots.length;
+
+  return { totalAmount, totalTransactions, totalOwners, totalParkingLots };
+}
+
+// ========== ユーザー情報更新 ==========
+
+// ユーザーのプロフィール更新
+export async function updateUserProfile(userId: number, data: {
+  name?: string;
+  email?: string;
+  phone?: string;
+}) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set(data).where(eq(users.id, userId));
+}
+
+// 全ユーザー一覧取得（運営者用）
+export async function getAllUsers() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(users)
+    .orderBy(desc(users.createdAt));
+}
+
+// ユーザーのロール更新
+export async function updateUserRole(userId: number, role: 'user' | 'owner' | 'admin') {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ role }).where(eq(users.id, userId));
+}
+
+// ユーザーのステータス更新
+export async function updateUserStatus(userId: number, status: 'pending' | 'active' | 'suspended') {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users).set({ status }).where(eq(users.id, userId));
 }

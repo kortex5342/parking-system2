@@ -1,8 +1,12 @@
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Car, QrCode, CreditCard, Shield } from "lucide-react";
+import { Car, QrCode, CreditCard, Shield, Building2, Users } from "lucide-react";
 import { Link } from "wouter";
+import { getLoginUrl } from "@/const";
 
 export default function Home() {
+  const { user, isAuthenticated } = useAuth();
+
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* 幾何学図形（装飾） */}
@@ -21,9 +25,35 @@ export default function Home() {
             <Link href="/scan">
               <Button variant="outline" className="bg-transparent">入庫・出庫</Button>
             </Link>
-            <Link href="/admin">
-              <Button variant="default">管理者</Button>
-            </Link>
+            {isAuthenticated ? (
+              <>
+                {(user?.role === 'owner' || user?.role === 'admin') && (
+                  <Link href="/owner">
+                    <Button variant="outline" className="bg-transparent">
+                      <Building2 className="w-4 h-4 mr-2" />
+                      オーナー
+                    </Button>
+                  </Link>
+                )}
+                {user?.role === 'admin' && (
+                  <Link href="/operator">
+                    <Button variant="default">
+                      <Users className="w-4 h-4 mr-2" />
+                      運営管理
+                    </Button>
+                  </Link>
+                )}
+                {user?.role === 'user' && (
+                  <Link href="/owner">
+                    <Button variant="default">オーナー登録</Button>
+                  </Link>
+                )}
+              </>
+            ) : (
+              <Button asChild variant="default">
+                <a href={getLoginUrl()}>ログイン</a>
+              </Button>
+            )}
           </div>
         </nav>
       </header>
@@ -50,9 +80,10 @@ export default function Home() {
                   QRスキャンで入庫
                 </Button>
               </Link>
-              <Link href="/admin">
+              <Link href="/owner">
                 <Button size="lg" variant="outline" className="text-lg px-8 bg-transparent">
-                  管理画面へ
+                  <Building2 className="w-5 h-5 mr-2" />
+                  駐車場オーナーになる
                 </Button>
               </Link>
             </div>
@@ -83,17 +114,59 @@ export default function Home() {
           </div>
         </section>
 
+        {/* オーナー向けセクション */}
+        <section className="py-20">
+          <div className="scandi-card max-w-4xl mx-auto">
+            <div className="grid md:grid-cols-2 gap-8 items-center">
+              <div>
+                <h2 className="text-3xl font-bold mb-4">駐車場オーナーの方へ</h2>
+                <p className="text-muted-foreground mb-6 leading-relaxed">
+                  ParkEaseを使えば、あなたの駐車場をスマートに管理できます。
+                  QRコードによる入出庫管理、複数の決済方法への対応、
+                  リアルタイムの売上確認など、必要な機能がすべて揃っています。
+                </p>
+                <ul className="space-y-3 mb-6">
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-accent rounded-full" />
+                    <span>複数の駐車場を一元管理</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-accent rounded-full" />
+                    <span>Stripe・Square・PayPayに対応</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-accent rounded-full" />
+                    <span>料金設定を自由にカスタマイズ</span>
+                  </li>
+                </ul>
+                <Link href="/owner">
+                  <Button size="lg">
+                    <Building2 className="w-5 h-5 mr-2" />
+                    オーナー登録する
+                  </Button>
+                </Link>
+              </div>
+              <div className="flex justify-center">
+                <div className="w-64 h-64 bg-accent rounded-3xl flex items-center justify-center">
+                  <Building2 className="w-24 h-24 text-accent-foreground" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* 料金案内 */}
         <section className="py-20">
           <div className="scandi-card max-w-2xl mx-auto text-center">
-            <h2 className="text-3xl font-bold mb-4">シンプルな料金体系</h2>
-            <p className="subtitle mb-8">わかりやすい時間制料金</p>
+            <h2 className="text-3xl font-bold mb-4">柔軟な料金設定</h2>
+            <p className="subtitle mb-8">オーナーが自由に設定可能</p>
             <div className="flex items-baseline justify-center gap-2 mb-4">
-              <span className="text-6xl font-bold">¥300</span>
-              <span className="text-2xl text-muted-foreground">/ 1時間</span>
+              <span className="text-4xl font-bold">10分〜60分</span>
+              <span className="text-xl text-muted-foreground">単位で</span>
             </div>
             <p className="text-muted-foreground">
-              端数は切り上げ計算。入庫から出庫までの時間で料金が決まります。
+              課金単位と料金をオーナーが自由に設定できます。
+              最大料金の設定も可能です。
             </p>
           </div>
         </section>

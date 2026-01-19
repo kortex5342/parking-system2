@@ -33,6 +33,29 @@ import {
   updatePricingSettings,
   getPricingSettings,
   calculateParkingFeeDynamic,
+  // マルチテナント対応
+  registerAsOwner,
+  approveOwner,
+  suspendOwner,
+  getAllOwners,
+  getPendingOwners,
+  createParkingLot,
+  getParkingLotsByOwner,
+  getParkingLotById,
+  updateParkingLot,
+  deleteParkingLot,
+  getAllParkingLots,
+  initializeParkingSpacesForLot,
+  getParkingSpacesByLot,
+  getActiveParkingRecordsByLot,
+  getPaymentRecordsByOwner,
+  getPaymentRecordsByLot,
+  getOwnerSalesSummary,
+  getTotalSalesSummary,
+  updateUserProfile,
+  getAllUsers,
+  updateUserRole,
+  updateUserStatus,
 } from "./db";
 import {
   createPayPayQRCode,
@@ -43,6 +66,14 @@ import {
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== 'admin') {
     throw new TRPCError({ code: 'FORBIDDEN', message: '管理者権限が必要です' });
+  }
+  return next({ ctx });
+});
+
+// オーナー専用プロシージャ
+const ownerProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== 'owner' && ctx.user.role !== 'admin') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'オーナー権限が必要です' });
   }
   return next({ ctx });
 });
@@ -754,6 +785,272 @@ export const appRouter = router({
         paypay: admin.paypayConnected,
       };
     }),
+  }),
+
+  // ========== オーナー向けAPI ==========
+  owner: router({
+    // オーナー登録申請
+    register: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.user.role === 'owner') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: '既にオーナーとして登録されています' });
+      }
+      if (ctx.user.role === 'admin') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: '管理者はオーナー登録できません' });
+      }
+      await registerAsOwner(ctx.user.id);
+      return { success: true, message: 'オーナー登録申請を受け付けました。承認をお待ちください。' };
+    }),
+
+    // マイページ情報取得
+    getMyPage: ownerProcedure.query(async ({ ctx }) => {
+      const user = await getUserById(ctx.user.id);
+      if (!user) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'ユーザーが見つかりません' });
+      }
+      
+      const parkingLots = await getParkingLotsByOwner(ctx.user.id);
+      const salesSummary = await getOwnerSalesSummary(ctx.user.id);
+      
+      return {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          status: user.status,
+          createdAt: user.createdAt,
+        },
+        parkingLots,
+        salesSummary,
+      };
+    }),
+
+    // プロフィール更新
+    updateProfile: ownerProcedure
+      .input(z.object({
+        name: z.string().optional(),
+        email: z.string().email().optional(),
+        phone: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await updateUserProfile(ctx.user.id, input);
+        return { success: true };
+      }),
+
+    // 駐車場作成
+    createParkingLot: ownerProcedure
+      .input(z.object({
+        name: z.string().min(1),
+        address: z.string().optional(),
+        description: z.string().optional(),
+        totalSpaces: z.number().min(1).max(100).default(10),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const user = await getUserById(ctx.user.id);
+        if (user?.status !== 'active') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'アカウントが有効ではありません' });
+        }
+        
+        const lotId = await createParkingLot({
+          ownerId: ctx.user.id,
+          name: input.name,
+          address: input.address,
+          description: input.description,
+          totalSpaces: input.totalSpaces,
+        });
+        
+        // 駐車スペースを初期化
+        await initializeParkingSpacesForLot(lotId, input.totalSpaces);
+        
+        return { success: true, lotId };
+      }),
+
+    // 駐車場一覧取得
+    getParkingLots: ownerProcedure.query(async ({ ctx }) => {
+      return await getParkingLotsByOwner(ctx.user.id);
+    }),
+
+    // 駐車場詳細取得
+    getParkingLot: ownerProcedure
+      .input(z.object({ lotId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const lot = await getParkingLotById(input.lotId);
+        if (!lot) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '駐車場が見つかりません' });
+        }
+        if (lot.ownerId !== ctx.user.id && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'この駐車場にアクセスする権限がありません' });
+        }
+        
+        const spaces = await getParkingSpacesByLot(input.lotId);
+        const activeRecords = await getActiveParkingRecordsByLot(input.lotId);
+        const payments = await getPaymentRecordsByLot(input.lotId, 50);
+        
+        return {
+          lot,
+          spaces,
+          activeRecords,
+          payments,
+        };
+      }),
+
+    // 駐車場更新
+    updateParkingLot: ownerProcedure
+      .input(z.object({
+        lotId: z.number(),
+        name: z.string().optional(),
+        address: z.string().optional(),
+        description: z.string().optional(),
+        pricingUnitMinutes: z.number().min(10).max(60).optional(),
+        pricingAmount: z.number().min(1).optional(),
+        maxDailyAmount: z.number().min(1).optional().nullable(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const lot = await getParkingLotById(input.lotId);
+        if (!lot) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '駐車場が見つかりません' });
+        }
+        if (lot.ownerId !== ctx.user.id && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'この駐車場を編集する権限がありません' });
+        }
+        
+        const { lotId, ...updateData } = input;
+        await updateParkingLot(lotId, {
+          ...updateData,
+          maxDailyAmount: updateData.maxDailyAmount ?? undefined,
+        });
+        return { success: true };
+      }),
+
+    // 駐車場削除
+    deleteParkingLot: ownerProcedure
+      .input(z.object({ lotId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const lot = await getParkingLotById(input.lotId);
+        if (!lot) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '駐車場が見つかりません' });
+        }
+        if (lot.ownerId !== ctx.user.id && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'この駐車場を削除する権限がありません' });
+        }
+        
+        await deleteParkingLot(input.lotId);
+        return { success: true };
+      }),
+
+    // 決済履歴取得
+    getPayments: ownerProcedure
+      .input(z.object({ limit: z.number().min(1).max(500).default(100) }))
+      .query(async ({ input, ctx }) => {
+        return await getPaymentRecordsByOwner(ctx.user.id, input.limit);
+      }),
+
+    // 売上集計取得
+    getSalesSummary: ownerProcedure.query(async ({ ctx }) => {
+      return await getOwnerSalesSummary(ctx.user.id);
+    }),
+  }),
+
+  // ========== 運営者向けAPI ==========
+  operator: router({
+    // 全オーナー一覧
+    getAllOwners: adminProcedure.query(async () => {
+      return await getAllOwners();
+    }),
+
+    // 承認待ちオーナー一覧
+    getPendingOwners: adminProcedure.query(async () => {
+      return await getPendingOwners();
+    }),
+
+    // オーナー承認
+    approveOwner: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input }) => {
+        await approveOwner(input.userId);
+        return { success: true };
+      }),
+
+    // オーナー停止
+    suspendOwner: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input }) => {
+        await suspendOwner(input.userId);
+        return { success: true };
+      }),
+
+    // オーナー有効化
+    activateOwner: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input }) => {
+        await updateUserStatus(input.userId, 'active');
+        return { success: true };
+      }),
+
+    // オーナー詳細取得
+    getOwnerDetail: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .query(async ({ input }) => {
+        const user = await getUserById(input.userId);
+        if (!user) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'ユーザーが見つかりません' });
+        }
+        
+        const parkingLots = await getParkingLotsByOwner(input.userId);
+        const salesSummary = await getOwnerSalesSummary(input.userId);
+        
+        return {
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            role: user.role,
+            status: user.status,
+            createdAt: user.createdAt,
+          },
+          parkingLots,
+          salesSummary,
+        };
+      }),
+
+    // 全駐車場一覧
+    getAllParkingLots: adminProcedure.query(async () => {
+      return await getAllParkingLots();
+    }),
+
+    // 全体売上集計
+    getTotalSummary: adminProcedure.query(async () => {
+      return await getTotalSalesSummary();
+    }),
+
+    // 全ユーザー一覧
+    getAllUsers: adminProcedure.query(async () => {
+      return await getAllUsers();
+    }),
+
+    // ユーザーロール更新
+    updateUserRole: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        role: z.enum(['user', 'owner', 'admin']),
+      }))
+      .mutation(async ({ input }) => {
+        await updateUserRole(input.userId, input.role);
+        return { success: true };
+      }),
+
+    // ユーザーステータス更新
+    updateUserStatus: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        status: z.enum(['pending', 'active', 'suspended']),
+      }))
+      .mutation(async ({ input }) => {
+        await updateUserStatus(input.userId, input.status);
+        return { success: true };
+      }),
   }),
 });
 

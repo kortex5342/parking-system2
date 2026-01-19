@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { Car, QrCode, Camera, ArrowLeft, CheckCircle2, Clock, Loader2, CreditCard, ExternalLink, Smartphone } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useParams } from "wouter";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { toast } from "sonner";
 
@@ -18,19 +18,29 @@ export default function Scan() {
   const [showCamera, setShowCamera] = useState(false);
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const [, setLocation] = useLocation();
+  const params = useParams<{ lotId?: string; spaceNumber?: string }>();
 
   // URLパラメータからQRコードを取得
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const qr = params.get("qr");
+    // パスパラメータからlotIdとspaceNumberを取得
+    if (params.lotId && params.spaceNumber) {
+      // lotIdとspaceNumberからQRコードを構築
+      const generatedQr = `LOT-${params.lotId}-SPACE-${params.spaceNumber}`;
+      setQrCode(generatedQr);
+      setView("space-info");
+      return;
+    }
+    
+    const searchParams = new URLSearchParams(window.location.search);
+    const qr = searchParams.get("qr");
     if (qr) {
       setQrCode(qr);
       setView("space-info");
     }
     
     // 決済完了時の処理
-    const paymentStatus = params.get("payment");
-    const token = params.get("token");
+    const paymentStatus = searchParams.get("payment");
+    const token = searchParams.get("token");
     if (paymentStatus === "success" && token) {
       localStorage.removeItem("parkingSessionToken");
       setSessionToken(null);
