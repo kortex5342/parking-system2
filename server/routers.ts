@@ -56,6 +56,10 @@ import {
   getAllUsers,
   updateUserRole,
   updateUserStatus,
+  getOwnerDailySalesData,
+  getOwnerMonthlySalesData,
+  getBankInfo,
+  updateBankInfo,
 } from "./db";
 import {
   createPayPayQRCode,
@@ -948,6 +952,35 @@ export const appRouter = router({
     getSalesSummary: ownerProcedure.query(async ({ ctx }) => {
       return await getOwnerSalesSummary(ctx.user.id);
     }),
+
+    // 日ごとの売上データ
+    getDailySalesData: ownerProcedure.query(async ({ ctx }) => {
+      return await getOwnerDailySalesData(ctx.user.id);
+    }),
+
+    // 月ごとの売上データ
+    getMonthlySalesData: ownerProcedure.query(async ({ ctx }) => {
+      return await getOwnerMonthlySalesData(ctx.user.id);
+    }),
+
+    // 銀行情報取得
+    getBankInfo: ownerProcedure.query(async ({ ctx }) => {
+      return await getBankInfo(ctx.user.id);
+    }),
+
+    // 銀行情報更新
+    updateBankInfo: ownerProcedure
+      .input(z.object({
+        bankName: z.string().optional(),
+        branchName: z.string().optional(),
+        accountType: z.enum(['checking', 'savings']).optional(),
+        accountNumber: z.string().optional(),
+        accountHolder: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await updateBankInfo(ctx.user.id, input);
+        return { success: true };
+      }),
   }),
 
   // ========== 運営者向けAPI ==========
@@ -1047,6 +1080,52 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         await updateUserStatus(input.userId, input.status);
+        return { success: true };
+      }),
+
+    // 指定したオーナーの駐車場一覧（運営者用）
+    getParkingLotsByOwner: adminProcedure
+      .input(z.object({ ownerId: z.number() }))
+      .query(async ({ input }) => {
+        return await getParkingLotsByOwner(input.ownerId);
+      }),
+
+    // 駐車場詳細取得（運営者用）
+    getParkingLot: adminProcedure
+      .input(z.object({ lotId: z.number() }))
+      .query(async ({ input }) => {
+        const lot = await getParkingLotById(input.lotId);
+        if (!lot) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '駐車場が見つかりません' });
+        }
+        
+        const spaces = await getParkingSpacesByLot(input.lotId);
+        const activeRecords = await getActiveParkingRecordsByLot(input.lotId);
+        const payments = await getPaymentRecordsByLot(input.lotId, 50);
+        
+        return {
+          lot,
+          spaces,
+          activeRecords,
+          payments,
+        };
+      }),
+
+    // 駐車場更新（運営者用）
+    updateParkingLot: adminProcedure
+      .input(z.object({
+        lotId: z.number(),
+        name: z.string().optional(),
+        address: z.string().optional(),
+        description: z.string().optional(),
+        totalSpaces: z.number().optional(),
+        pricingUnitMinutes: z.number().optional(),
+        pricingAmount: z.number().optional(),
+        maxDailyAmount: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { lotId, ...updateData } = input;
+        await updateParkingLot(lotId, updateData);
         return { success: true };
       }),
   }),

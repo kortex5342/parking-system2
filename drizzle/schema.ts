@@ -39,6 +39,12 @@ export const users = mysqlTable("users", {
   // 料金設定（オーナーごと）
   pricingUnitMinutes: int("pricingUnitMinutes").default(60).notNull(),
   pricingAmount: int("pricingAmount").default(300).notNull(),
+  // 銀行情報（振込先設定）
+  bankName: varchar("bankName", { length: 100 }),
+  branchName: varchar("branchName", { length: 100 }),
+  accountType: mysqlEnum("accountType", ["checking", "savings"]),
+  accountNumber: varchar("accountNumber", { length: 20 }),
+  accountHolder: varchar("accountHolder", { length: 100 }),
 });
 
 export type User = typeof users.$inferSelect;

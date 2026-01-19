@@ -1,4 +1,4 @@
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, gte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, parkingSpaces, parkingRecords, paymentRecords, InsertParkingSpace, InsertParkingRecord, InsertPaymentRecord } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -964,4 +964,127 @@ export async function updateUserStatus(userId: number, status: 'pending' | 'acti
   if (!db) return;
 
   await db.update(users).set({ status }).where(eq(users.id, userId));
+}
+
+
+// オーナーの日ごとの売上データ（過去30日）
+export async function getOwnerDailySalesData(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const records = await db.select().from(paymentRecords)
+    .where(and(
+      eq(paymentRecords.ownerId, ownerId),
+      eq(paymentRecords.paymentStatus, 'completed'),
+      gte(paymentRecords.createdAt, thirtyDaysAgo)
+    ));
+
+  // 日ごとに集計
+  const dailyData: Record<string, { date: string; amount: number; count: number }> = {};
+  
+  records.forEach((record) => {
+    const date = new Date(record.createdAt).toLocaleDateString('ja-JP');
+    if (!dailyData[date]) {
+      dailyData[date] = { date, amount: 0, count: 0 };
+    }
+    dailyData[date].amount += record.amount;
+    dailyData[date].count += 1;
+  });
+
+  // 過去30日間のすべての日付を含める
+  const result = [];
+  for (let i = 29; i >= 0; i--) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    const dateStr = date.toLocaleDateString('ja-JP');
+    result.push(dailyData[dateStr] || { date: dateStr, amount: 0, count: 0 });
+  }
+
+  return result;
+}
+
+// オーナーの月ごとの売上データ（過去12ヶ月）
+export async function getOwnerMonthlySalesData(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const twelveMonthsAgo = new Date();
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+  const records = await db.select().from(paymentRecords)
+    .where(and(
+      eq(paymentRecords.ownerId, ownerId),
+      eq(paymentRecords.paymentStatus, 'completed'),
+      gte(paymentRecords.createdAt, twelveMonthsAgo)
+    ));
+
+  // 月ごとに集計
+  const monthlyData: Record<string, { month: string; amount: number; count: number }> = {};
+  
+  records.forEach((record) => {
+    const date = new Date(record.createdAt);
+    const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    if (!monthlyData[month]) {
+      monthlyData[month] = { month, amount: 0, count: 0 };
+    }
+    monthlyData[month].amount += record.amount;
+    monthlyData[month].count += 1;
+  });
+
+  // 過去12ヶ月のすべての月を含める
+  const result = [];
+  for (let i = 11; i >= 0; i--) {
+    const date = new Date();
+    date.setMonth(date.getMonth() - i);
+    const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const monthLabel = `${date.getFullYear()}年${date.getMonth() + 1}月`;
+    result.push(monthlyData[month] || { month: monthLabel, amount: 0, count: 0 });
+  }
+
+  return result;
+}
+
+// 銀行情報の取得
+export async function getBankInfo(ownerId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const user = await db.select().from(users)
+    .where(eq(users.id, ownerId))
+    .limit(1);
+
+  if (!user || user.length === 0) return null;
+
+  return {
+    bankName: user[0].bankName || '',
+    branchName: user[0].branchName || '',
+    accountType: user[0].accountType || '',
+    accountNumber: user[0].accountNumber || '',
+    accountHolder: user[0].accountHolder || '',
+  };
+}
+
+// 銀行情報の更新
+export async function updateBankInfo(ownerId: number, bankInfo: {
+  bankName?: string;
+  branchName?: string;
+  accountType?: 'checking' | 'savings';
+  accountNumber?: string;
+  accountHolder?: string;
+}) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users)
+    .set({
+      bankName: bankInfo.bankName,
+      branchName: bankInfo.branchName,
+      accountType: bankInfo.accountType,
+      accountNumber: bankInfo.accountNumber,
+      accountHolder: bankInfo.accountHolder,
+    })
+    .where(eq(users.id, ownerId));
 }

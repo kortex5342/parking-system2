@@ -20,6 +20,7 @@ import {
   XCircle,
   Wallet,
   RefreshCw,
+  Edit,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useEffect, useState } from "react";
@@ -105,7 +106,7 @@ export default function Admin() {
         {/* メインコンテンツ */}
         <main className="container py-8">
           <Tabs defaultValue="status" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+            <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
               <TabsTrigger value="status" className="gap-2">
                 <Car className="w-4 h-4" />
                 <span className="hidden sm:inline">入庫状況</span>
@@ -118,9 +119,13 @@ export default function Admin() {
                 <QrCode className="w-4 h-4" />
                 <span className="hidden sm:inline">QRコード</span>
               </TabsTrigger>
-              <TabsTrigger value="settings" className="gap-2">
+              <TabsTrigger value="parking" className="gap-2">
                 <Settings className="w-4 h-4" />
-                <span className="hidden sm:inline">設定</span>
+                <span className="hidden sm:inline">駐車場管理</span>
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="gap-2">
+                <Wallet className="w-4 h-4" />
+                <span className="hidden sm:inline">決済設定</span>
               </TabsTrigger>
             </TabsList>
 
@@ -134,6 +139,10 @@ export default function Admin() {
 
             <TabsContent value="qr">
               <QRTab />
+            </TabsContent>
+
+            <TabsContent value="parking">
+              <ParkingManagementTab />
             </TabsContent>
 
             <TabsContent value="settings">
@@ -844,6 +853,275 @@ function SettingsTab() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+
+// 駐車場管理タブ
+function ParkingManagementTab() {
+  const [selectedOwnerId, setSelectedOwnerId] = useState<number | null>(null);
+  const [selectedLotId, setSelectedLotId] = useState<number | null>(null);
+  const [editingLotId, setEditingLotId] = useState<number | null>(null);
+  const [editFormData, setEditFormData] = useState<any>({});
+
+  const { data: owners, isLoading: ownersLoading } = trpc.operator.getAllOwners.useQuery();
+  const { data: lots, isLoading: lotsLoading } = trpc.operator.getParkingLotsByOwner.useQuery(
+    { ownerId: selectedOwnerId || 0 },
+    { enabled: !!selectedOwnerId }
+  );
+  const { data: lotDetail, isLoading: lotDetailLoading } = trpc.operator.getParkingLot.useQuery(
+    { lotId: selectedLotId || 0 },
+    { enabled: !!selectedLotId }
+  );
+
+  const utils = trpc.useUtils();
+  const updateLotMutation = trpc.operator.updateParkingLot.useMutation({
+    onSuccess: () => {
+      toast.success('駐車場情報を更新しました');
+      setEditingLotId(null);
+      utils.operator.getParkingLot.invalidate({ lotId: selectedLotId || 0 });
+      utils.operator.getParkingLotsByOwner.invalidate();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  if (ownersLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-semibold">駐車場管理</h2>
+        <p className="text-sm text-muted-foreground">オーナーの駐車場設定を管理</p>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* オーナー一覧 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">オーナー一覧</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {owners && owners.length > 0 ? (
+                owners.map((owner: any) => (
+                  <button
+                    key={owner.id}
+                    onClick={() => {
+                      setSelectedOwnerId(owner.id);
+                      setSelectedLotId(null);
+                      setEditingLotId(null);
+                    }}
+                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                      selectedOwnerId === owner.id
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'hover:bg-muted border-border'
+                    }`}
+                  >
+                    <p className="font-medium">{owner.name || `ユーザー${owner.id}`}</p>
+                    <p className="text-sm opacity-75">{owner.email}</p>
+                  </button>
+                ))
+              ) : (
+                <p className="text-muted-foreground text-center py-8">オーナーがいません</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 駐車場一覧 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">駐車場一覧</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {selectedOwnerId ? (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {lotsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : lots && lots.length > 0 ? (
+                  lots.map((lot: any) => (
+                    <button
+                      key={lot.id}
+                      onClick={() => {
+                        setSelectedLotId(lot.id);
+                        setEditingLotId(null);
+                      }}
+                      className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                        selectedLotId === lot.id
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'hover:bg-muted border-border'
+                      }`}
+                    >
+                      <p className="font-medium">{lot.name}</p>
+                      <p className="text-sm opacity-75">{lot.totalSpaces}台 • ¥{lot.pricingAmount}/{lot.pricingUnitMinutes}分</p>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-muted-foreground text-center py-8">駐車場がありません</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-center py-8">オーナーを選択してください</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 駐車場詳細設定 */}
+      {selectedLotId && lotDetail && (
+        <Card>
+          <CardHeader>
+            <CardTitle>駐車場設定</CardTitle>
+            <CardDescription>{lotDetail.lot.name}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {editingLotId === selectedLotId ? (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">駐車場名</Label>
+                  <Input
+                    id="name"
+                    value={editFormData.name || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="address">住所</Label>
+                  <Input
+                    id="address"
+                    value={editFormData.address || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="totalSpaces">駐車スペース数</Label>
+                  <Input
+                    id="totalSpaces"
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={editFormData.totalSpaces || 0}
+                    onChange={(e) => setEditFormData({ ...editFormData, totalSpaces: parseInt(e.target.value) })}
+                  />
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="pricingAmount">料金（円）</Label>
+                    <Input
+                      id="pricingAmount"
+                      type="number"
+                      min="0"
+                      value={editFormData.pricingAmount || 0}
+                      onChange={(e) => setEditFormData({ ...editFormData, pricingAmount: parseInt(e.target.value) })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pricingUnitMinutes">料金単位（分）</Label>
+                    <Input
+                      id="pricingUnitMinutes"
+                      type="number"
+                      min="1"
+                      value={editFormData.pricingUnitMinutes || 0}
+                      onChange={(e) => setEditFormData({ ...editFormData, pricingUnitMinutes: parseInt(e.target.value) })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maxDailyAmount">1日最大料金（円、オプション）</Label>
+                  <Input
+                    id="maxDailyAmount"
+                    type="number"
+                    min="0"
+                    value={editFormData.maxDailyAmount || 0}
+                    onChange={(e) => setEditFormData({ ...editFormData, maxDailyAmount: parseInt(e.target.value) || null })}
+                    placeholder="設定しない場合は空白"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => updateLotMutation.mutate({
+                      lotId: selectedLotId,
+                      ...editFormData,
+                    })}
+                    disabled={updateLotMutation.isPending}
+                  >
+                    {updateLotMutation.isPending ? '保存中...' : '保存'}
+                  </Button>
+                  <Button variant="outline" onClick={() => setEditingLotId(null)}>
+                    キャンセル
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <p className="text-sm text-muted-foreground">駐車場名</p>
+                    <p className="font-medium">{lotDetail.lot.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">住所</p>
+                    <p className="font-medium">{lotDetail.lot.address || '-'}</p>
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <p className="text-sm text-muted-foreground">駐車スペース数</p>
+                    <p className="font-medium">{lotDetail.lot.totalSpaces}台</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">ステータス</p>
+                    <Badge variant={lotDetail.lot.status === 'active' ? 'default' : 'secondary'}>
+                      {lotDetail.lot.status === 'active' ? '稼働中' : '停止中'}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground">料金</p>
+                    <p className="font-medium">¥{lotDetail.lot.pricingAmount || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">料金単位</p>
+                    <p className="font-medium">{lotDetail.lot.pricingUnitMinutes || 60}分</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">1日最大料金</p>
+                    <p className="font-medium">{lotDetail.lot.maxDailyAmount ? `¥${lotDetail.lot.maxDailyAmount}` : '無制限'}</p>
+                  </div>
+                </div>
+                <Button
+                  onClick={() => {
+                    setEditFormData({
+                      name: lotDetail.lot.name,
+                      address: lotDetail.lot.address,
+                      totalSpaces: lotDetail.lot.totalSpaces,
+                      pricingAmount: lotDetail.lot.pricingAmount,
+                      pricingUnitMinutes: lotDetail.lot.pricingUnitMinutes,
+                      maxDailyAmount: lotDetail.lot.maxDailyAmount,
+                    });
+                    setEditingLotId(selectedLotId);
+                  }}
+                >
+                  <Edit className="mr-2 h-4 w-4" />
+                  編集
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
