@@ -587,6 +587,11 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
     maxDailyAmount: 3000,
   });
 
+  const [timePeriods, setTimePeriods] = useState([
+    { startHour: 5, endHour: 19, maxAmount: 3000 },
+    { startHour: 19, endHour: 5, maxAmount: 1300 },
+  ]);
+
   const utils = trpc.useUtils();
   const createMutation = trpc.operator.createParkingLotForOwner.useMutation({
     onSuccess: () => {
@@ -600,6 +605,10 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
         pricingAmount: 300,
         maxDailyAmount: 3000,
       });
+      setTimePeriods([
+        { startHour: 5, endHour: 19, maxAmount: 3000 },
+        { startHour: 19, endHour: 5, maxAmount: 1300 },
+      ]);
       onOpenChange(false);
       utils.operator.getOwnerDetail.invalidate();
     },
@@ -608,13 +617,30 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ownerId) return;
-    createMutation.mutate({
-      ownerId,
-      ...formData,
-    });
+    
+    try {
+      const response = await createMutation.mutateAsync({
+        ownerId,
+        ...formData,
+      });
+      
+      if (response && response.lotId) {
+        const savePeriodMutation = trpc.operator.saveMaxPricingPeriod.useMutation();
+        for (const period of timePeriods) {
+          savePeriodMutation.mutate({
+            parkingLotId: response.lotId,
+            startHour: period.startHour,
+            endHour: period.endHour,
+            maxAmount: period.maxAmount,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    }
   };
 
   return (
@@ -708,9 +734,78 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
 
           {/* 時間帯ごとの最大料金セクション */}
           <div className="border-t pt-4 mt-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold">時間帯ごとの最大料金</h3>
-              <p className="text-sm text-muted-foreground">例：19時～5時は最大5００円</p>
+            <h3 className="font-semibold mb-4">時間帯ごとの最大料金設定</h3>
+            
+            {/* 昼間設定 */}
+            <div className="space-y-3 mb-4 p-3 border rounded-md bg-muted/50">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm">昼間：</span>
+                <select 
+                  className="px-2 py-1 border rounded text-sm" 
+                  value={timePeriods[0].startHour}
+                  onChange={(e) => setTimePeriods([{ ...timePeriods[0], startHour: parseInt(e.target.value) }, timePeriods[1]])}
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>{i}時</option>
+                  ))}
+                </select>
+                <span className="text-sm">から</span>
+                <select 
+                  className="px-2 py-1 border rounded text-sm" 
+                  value={timePeriods[0].endHour}
+                  onChange={(e) => setTimePeriods([{ ...timePeriods[0], endHour: parseInt(e.target.value) }, timePeriods[1]])}
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>{i}時</option>
+                  ))}
+                </select>
+                <span className="text-sm">まで、最大料金</span>
+                <select 
+                  className="px-2 py-1 border rounded text-sm" 
+                  value={timePeriods[0].maxAmount}
+                  onChange={(e) => setTimePeriods([{ ...timePeriods[0], maxAmount: parseInt(e.target.value) }, timePeriods[1]])}
+                >
+                  {Array.from({ length: 100 }, (_, i) => (
+                    <option key={i} value={(i + 1) * 100}>¥{(i + 1) * 100}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            {/* 夜間設定 */}
+            <div className="space-y-3 p-3 border rounded-md bg-muted/50">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm">夜間：</span>
+                <select 
+                  className="px-2 py-1 border rounded text-sm" 
+                  value={timePeriods[1].startHour}
+                  onChange={(e) => setTimePeriods([timePeriods[0], { ...timePeriods[1], startHour: parseInt(e.target.value) }])}
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>{i}時</option>
+                  ))}
+                </select>
+                <span className="text-sm">から</span>
+                <select 
+                  className="px-2 py-1 border rounded text-sm" 
+                  value={timePeriods[1].endHour}
+                  onChange={(e) => setTimePeriods([timePeriods[0], { ...timePeriods[1], endHour: parseInt(e.target.value) }])}
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>{i}時</option>
+                  ))}
+                </select>
+                <span className="text-sm">まで、最大料金</span>
+                <select 
+                  className="px-2 py-1 border rounded text-sm" 
+                  value={timePeriods[1].maxAmount}
+                  onChange={(e) => setTimePeriods([timePeriods[0], { ...timePeriods[1], maxAmount: parseInt(e.target.value) }])}
+                >
+                  {Array.from({ length: 100 }, (_, i) => (
+                    <option key={i} value={(i + 1) * 100}>¥{(i + 1) * 100}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
