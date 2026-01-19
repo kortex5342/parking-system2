@@ -901,9 +901,23 @@ export const appRouter = router({
         return { success: true, lotId };
       }),
 
-    // 駐車場一覧取得
+    // 駐車場一覧取得（時間帯設定付き）
     getParkingLots: ownerProcedure.query(async ({ ctx }) => {
-      return await getParkingLotsByOwner(ctx.user.id);
+      const lots = await getParkingLotsByOwner(ctx.user.id);
+      if (!lots) {
+        return [];
+      }
+      
+      // 各駐車場の時間帯設定を取得
+      const lotsWithPeriods = await Promise.all(lots.map(async (lot) => {
+        const periods = await getMaxPricingPeriodsByLot(lot.id);
+        return {
+          ...lot,
+          timePeriods: periods || [],
+        };
+      }));
+      
+      return lotsWithPeriods;
     }),
 
     // 駐車場詳細取得

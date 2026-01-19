@@ -278,3 +278,15 @@
 - [x] ParkingLotDetailDialogに昔間と夜間ごとのチェックボックスを追加
 - [x] timePeriodsに昔間と夜間の有効/無効フラグを追加
 - [x] テスト・検証
+
+## オーナーページ複数駐車場対応（完了）
+- [x] owner.getParkingLotsプロシージャを実装
+- [x] OwnerDashboardの設定画面を複数駐車場対応に修正
+- [x] 各駐車場ごとに時間帯ごとの最大料金設定を表示
+- [x] テスト・検証
+
+## オーナーページ駐車場設定表示問題（修正完了）
+- [x] getParkingLotsプロシージャが正しく動作していることを確認
+- [x] getMaxPricingPeriodsByLot関数を使用して修正
+- [x] ParkingLotSettingsCardが正しくデータを取得・表示していることを確認
+- [x] 問題を修正してテスト完了
