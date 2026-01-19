@@ -482,6 +482,8 @@ function OwnersTab() {
         open={selectedOwner !== null} 
         onOpenChange={(open) => !open && setSelectedOwner(null)} 
       />
+
+      <AddOwnerSection />
     </div>
   );
 }
