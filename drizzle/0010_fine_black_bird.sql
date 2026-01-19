@@ -1,1 +1,0 @@
-ALTER TABLE `parking_lots` ADD `maxDailyAmountEnabled` boolean DEFAULT true NOT NULL;
