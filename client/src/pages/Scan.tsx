@@ -623,6 +623,14 @@ function PaymentView({
   const hasRealPayPay = false;
   const cardProvider = null;
 
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="text-center mb-8">
@@ -630,14 +638,12 @@ function PaymentView({
         <p className="subtitle">決済方法を選択してください</p>
       </div>
 
-      {data && (
-        <Card className="bg-secondary/50">
-          <CardContent className="pt-6 text-center">
-            <p className="text-muted-foreground mb-2">お支払い金額</p>
-            <p className="text-4xl font-bold">¥{data.amount.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-      )}
+      <Card className="bg-secondary/50">
+        <CardContent className="pt-6 text-center">
+          <p className="text-muted-foreground mb-2">お支払い金額</p>
+          <p className="text-4xl font-bold">¥{data.amount.toLocaleString()}</p>
+        </CardContent>
+      </Card>
 
       <div className="space-y-3">
         {/* クレジットカード決済（実決済） */}
