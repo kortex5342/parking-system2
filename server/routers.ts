@@ -71,11 +71,23 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
 });
 
 // オーナー専用プロシージャ
-const ownerProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== 'owner' && ctx.user.role !== 'admin') {
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'オーナー権限が必要です' });
-  }
-  return next({ ctx });
+// デモ版: 認証不要、誰でもアクセス可能
+// デモ用のダミーユーザーIDを使用
+const DEMO_USER_ID = 1;
+const ownerProcedure = publicProcedure.use(({ ctx, next }) => {
+  // デモ版のため、ダミーユーザーを設定
+  const demoUser = {
+    id: DEMO_USER_ID,
+    openId: 'demo-user',
+    name: 'デモユーザー',
+    email: 'demo@example.com',
+    loginMethod: 'demo',
+    role: 'owner' as const,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    lastSignedIn: new Date(),
+  };
+  return next({ ctx: { ...ctx, user: ctx.user || demoUser } });
 });
 
 // Stripe APIキーのテスト

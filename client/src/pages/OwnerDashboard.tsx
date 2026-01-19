@@ -33,39 +33,12 @@ import { Link } from "wouter";
 import { getLoginUrl } from "@/const";
 
 export default function OwnerDashboard() {
-  const { user, loading: authLoading, isAuthenticated } = useAuth();
+  // デモ版: 認証不要
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>ログインが必要です</CardTitle>
-            <CardDescription>オーナーダッシュボードにアクセスするにはログインしてください</CardDescription>
-          </CardHeader>
-          <CardContent className="flex justify-center">
-            <Button asChild>
-              <a href={getLoginUrl()}>ログイン</a>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // オーナーまたは管理者でない場合
-  if (user?.role !== 'owner' && user?.role !== 'admin') {
-    return <OwnerRegistration />;
-  }
+  // デモ版のため、認証チェックをスキップ
+  // 誰でもアクセス可能
 
   return (
     <div className="min-h-screen bg-background">
@@ -80,7 +53,7 @@ export default function OwnerDashboard() {
               <Badge variant="outline">オーナー</Badge>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground">{user?.name || user?.email}</span>
+              <Badge variant="secondary">デモ版</Badge>
             </div>
           </div>
         </div>

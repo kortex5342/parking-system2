@@ -15,7 +15,7 @@ import OwnerLotQR from "./pages/OwnerLotQR";
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/" component={OwnerDashboard} />
       <Route path="/scan" component={Scan} />
       <Route path="/scan/:lotId/:spaceNumber" component={Scan} />
       <Route path="/admin" component={Admin} />
