@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, date, decimal } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -133,3 +133,42 @@ export const paymentRecords = mysqlTable("payment_records", {
 
 export type PaymentRecord = typeof paymentRecords.$inferSelect;
 export type InsertPaymentRecord = typeof paymentRecords.$inferInsert;
+
+
+// 決済方法設定テーブル（各駐車場ごとの決済方法設定）
+export const paymentMethods = mysqlTable("paymentMethods", {
+  id: int("id").autoincrement().primaryKey(),
+  lotId: int("lotId").notNull().references(() => parkingLots.id, { onDelete: "cascade" }),
+  method: mysqlEnum("method", ["paypay", "rakuten_pay", "line_pay", "apple_pay", "ic_card", "credit_card"]).notNull(),
+  enabled: boolean("enabled").default(true).notNull(),
+  // APIキー情報（暗号化推奨）
+  apiKey: varchar("apiKey", { length: 256 }),
+  apiSecret: varchar("apiSecret", { length: 256 }),
+  merchantId: varchar("merchantId", { length: 64 }),
+  // 手数料設定
+  feePercentage: decimal("feePercentage", { precision: 5, scale: 2 }).default("0").notNull(), // 手数料率（%）
+  feeFixed: int("feeFixed").default(0).notNull(), // 固定手数料（円）
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PaymentMethod = typeof paymentMethods.$inferSelect;
+export type InsertPaymentMethod = typeof paymentMethods.$inferInsert;
+
+// 振込スケジュールテーブル
+export const payoutSchedules = mysqlTable("payoutSchedules", {
+  id: int("id").autoincrement().primaryKey(),
+  ownerId: int("ownerId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  lotId: int("lotId").notNull().references(() => parkingLots.id, { onDelete: "cascade" }),
+  periodStart: date("periodStart").notNull(), // 締め期間開始（月初）
+  periodEnd: date("periodEnd").notNull(), // 締め期間終了（月末）
+  payoutDeadline: date("payoutDeadline").notNull(), // 振込期限（翌月10日）
+  totalAmount: int("totalAmount").default(0).notNull(), // 振込予定額（手数料差引後）
+  status: mysqlEnum("status", ["pending", "scheduled", "completed", "failed"]).default("pending").notNull(),
+  payoutDate: date("payoutDate"), // 実際の振込日
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PayoutSchedule = typeof payoutSchedules.$inferSelect;
+export type InsertPayoutSchedule = typeof payoutSchedules.$inferInsert;

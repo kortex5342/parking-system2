@@ -26,6 +26,7 @@ import { Link } from "wouter";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import QRCode from "qrcode";
+import { PaymentSettingsTab } from "@/components/PaymentSettingsTab";
 
 export default function Admin() {
   const { user, loading, isAuthenticated } = useAuth();
@@ -146,7 +147,7 @@ export default function Admin() {
             </TabsContent>
 
             <TabsContent value="settings">
-              <SettingsTab />
+              <PaymentSettingsTab />
             </TabsContent>
           </Tabs>
         </main>

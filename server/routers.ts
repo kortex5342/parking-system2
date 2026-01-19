@@ -60,6 +60,14 @@ import {
   getOwnerMonthlySalesData,
   getBankInfo,
   updateBankInfo,
+  getPaymentMethodsByLot,
+  setPaymentMethod,
+  updatePaymentMethod,
+  deletePaymentMethod,
+  getPayoutSchedulesByOwner,
+  getPayoutSchedulesByLot,
+  createPayoutSchedule,
+  updatePayoutSchedule,
 } from "./db";
 import {
   createPayPayQRCode,
@@ -1128,6 +1136,71 @@ export const appRouter = router({
         await updateParkingLot(lotId, updateData);
         return { success: true };
       }),
+
+    // 決済方法一覧取得（運営者用）
+    getPaymentMethods: adminProcedure
+      .input(z.object({ lotId: z.number() }))
+      .query(async ({ input }) => {
+        return await getPaymentMethodsByLot(input.lotId);
+      }),
+
+    // 決済方法設定（運営者用）
+    setPaymentMethod: adminProcedure
+      .input(z.object({
+        lotId: z.number(),
+        method: z.enum(['paypay', 'rakuten_pay', 'line_pay', 'apple_pay', 'ic_card', 'credit_card']),
+        apiKey: z.string().optional(),
+        apiSecret: z.string().optional(),
+        merchantId: z.string().optional(),
+        feePercentage: z.number().optional(),
+        feeFixed: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        await setPaymentMethod({
+          lotId: input.lotId,
+          method: input.method,
+          apiKey: input.apiKey,
+          apiSecret: input.apiSecret,
+          merchantId: input.merchantId,
+          feePercentage: input.feePercentage?.toString(),
+          feeFixed: input.feeFixed,
+          enabled: true,
+        });
+        return { success: true };
+      }),
+
+    // 決済方法更新（運営者用）
+    updatePaymentMethod: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        enabled: z.boolean().optional(),
+        apiKey: z.string().optional(),
+        apiSecret: z.string().optional(),
+        merchantId: z.string().optional(),
+        feePercentage: z.number().optional(),
+        feeFixed: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...updateData } = input;
+        await updatePaymentMethod(id, {
+          ...updateData,
+          feePercentage: updateData.feePercentage?.toString(),
+        });
+        return { success: true };
+      }),
+
+    // 決済方法削除（運営者用）
+    deletePaymentMethod: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deletePaymentMethod(input.id);
+        return { success: true };
+      }),
+
+    // 振込スケジュール取得（オーナー用）
+    getPayoutSchedules: ownerProcedure.query(async ({ ctx }) => {
+      return await getPayoutSchedulesByOwner(ctx.user.id);
+    }),
   }),
 });
 

@@ -1,6 +1,6 @@
 import { eq, desc, and, gte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, parkingSpaces, parkingRecords, paymentRecords, InsertParkingSpace, InsertParkingRecord, InsertPaymentRecord } from "../drizzle/schema";
+import { InsertUser, users, parkingSpaces, parkingRecords, paymentRecords, paymentMethods, payoutSchedules, InsertParkingSpace, InsertParkingRecord, InsertPaymentRecord, InsertPaymentMethod, InsertPayoutSchedule } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { nanoid } from 'nanoid';
 
@@ -1087,4 +1087,109 @@ export async function updateBankInfo(ownerId: number, bankInfo: {
       accountHolder: bankInfo.accountHolder,
     })
     .where(eq(users.id, ownerId));
+}
+
+
+// ========== Payment Methods ==========
+export async function getPaymentMethodsByLot(lotId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    return await db.select().from(paymentMethods).where(eq(paymentMethods.lotId, lotId));
+  } catch (error) {
+    console.error("[Database] Error getting payment methods:", error);
+    return [];
+  }
+}
+
+export async function setPaymentMethod(data: InsertPaymentMethod) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  try {
+    await db.insert(paymentMethods).values(data);
+  } catch (error) {
+    console.error("[Database] Error setting payment method:", error);
+    throw error;
+  }
+}
+
+export async function updatePaymentMethod(id: number, data: Partial<InsertPaymentMethod>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  try {
+    await db.update(paymentMethods)
+      .set(data)
+      .where(eq(paymentMethods.id, id));
+  } catch (error) {
+    console.error("[Database] Error updating payment method:", error);
+    throw error;
+  }
+}
+
+export async function deletePaymentMethod(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  try {
+    await db.delete(paymentMethods).where(eq(paymentMethods.id, id));
+  } catch (error) {
+    console.error("[Database] Error deleting payment method:", error);
+    throw error;
+  }
+}
+
+// ========== Payout Schedules ==========
+export async function getPayoutSchedulesByOwner(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    return await db.select().from(payoutSchedules)
+      .where(eq(payoutSchedules.ownerId, ownerId));
+  } catch (error) {
+    console.error("[Database] Error getting payout schedules:", error);
+    return [];
+  }
+}
+
+export async function getPayoutSchedulesByLot(lotId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    return await db.select().from(payoutSchedules)
+      .where(eq(payoutSchedules.lotId, lotId));
+  } catch (error) {
+    console.error("[Database] Error getting payout schedules:", error);
+    return [];
+  }
+}
+
+export async function createPayoutSchedule(data: InsertPayoutSchedule) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  try {
+    await db.insert(payoutSchedules).values(data);
+  } catch (error) {
+    console.error("[Database] Error creating payout schedule:", error);
+    throw error;
+  }
+}
+
+export async function updatePayoutSchedule(id: number, data: Partial<InsertPayoutSchedule>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  try {
+    await db.update(payoutSchedules)
+      .set(data)
+      .where(eq(payoutSchedules.id, id));
+  } catch (error) {
+    console.error("[Database] Error updating payout schedule:", error);
+    throw error;
+  }
 }
