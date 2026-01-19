@@ -299,6 +299,7 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
     pricingUnitMinutes: 60,
     pricingAmount: 300,
     maxDailyAmount: 3000,
+    maxDailyAmountEnabled: true,
   });
 
   const updateMutation = trpc.operator.updateParkingLot.useMutation({
@@ -320,7 +321,7 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
         totalSpaces: formData.totalSpaces,
         pricingUnitMinutes: formData.pricingUnitMinutes,
         pricingAmount: formData.pricingAmount,
-        maxDailyAmount: formData.maxDailyAmount,
+        maxDailyAmount: formData.maxDailyAmountEnabled ? formData.maxDailyAmount : undefined,
       });
     }
   };
@@ -382,7 +383,19 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
               step="100"
               value={formData.maxDailyAmount}
               onChange={(e) => setFormData({ ...formData, maxDailyAmount: parseInt(e.target.value) })}
+              disabled={!formData.maxDailyAmountEnabled}
             />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="maxDailyAmountEnabled"
+              type="checkbox"
+              checked={formData.maxDailyAmountEnabled}
+              onChange={(e) => setFormData({ ...formData, maxDailyAmountEnabled: e.target.checked })}
+              className="w-4 h-4"
+            />
+            <Label htmlFor="maxDailyAmountEnabled" className="font-normal">最大駐車料金を有効にする</Label>
           </div>
 
           {/* 時間帯ごとの最大料金セクション */}
@@ -585,6 +598,7 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
     pricingUnitMinutes: 60,
     pricingAmount: 300,
     maxDailyAmount: 3000,
+    maxDailyAmountEnabled: true,
   });
 
   const [timePeriods, setTimePeriods] = useState([
@@ -604,6 +618,7 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
         pricingUnitMinutes: 60,
         pricingAmount: 300,
         maxDailyAmount: 3000,
+        maxDailyAmountEnabled: true,
       });
       setTimePeriods([
         { startHour: 5, endHour: 19, maxAmount: 3000 },
@@ -625,6 +640,7 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
       const response = await createMutation.mutateAsync({
         ownerId,
         ...formData,
+        maxDailyAmount: formData.maxDailyAmountEnabled ? formData.maxDailyAmount : 0,
       });
       
       if (response && response.lotId) {
@@ -729,7 +745,19 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
               step="100"
               value={formData.maxDailyAmount}
               onChange={(e) => setFormData({ ...formData, maxDailyAmount: parseInt(e.target.value) })}
+              disabled={!formData.maxDailyAmountEnabled}
             />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="maxDailyAmountEnabled"
+              type="checkbox"
+              checked={formData.maxDailyAmountEnabled}
+              onChange={(e) => setFormData({ ...formData, maxDailyAmountEnabled: e.target.checked })}
+              className="w-4 h-4"
+            />
+            <Label htmlFor="maxDailyAmountEnabled" className="font-normal">最大駐車料金を有効にする</Label>
           </div>
 
           {/* 時間帯ごとの最大料金セクション */}

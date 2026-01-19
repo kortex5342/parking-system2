@@ -67,6 +67,7 @@ export const parkingLots = mysqlTable("parking_lots", {
   pricingUnitMinutes: int("pricingUnitMinutes"), // nullの場合はオーナーのデフォルトを使用
   pricingAmount: int("pricingAmount"), // nullの場合はオーナーのデフォルトを使用
   maxDailyAmount: int("maxDailyAmount"), // 1日最大料金（オプション）
+  maxDailyAmountEnabled: boolean("maxDailyAmountEnabled").default(true).notNull(), // 1日最大料金の有効/無効フラグ
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

@@ -722,6 +722,7 @@ export async function updateParkingLot(lotId: number, data: {
   pricingUnitMinutes?: number;
   pricingAmount?: number;
   maxDailyAmount?: number;
+  maxDailyAmountEnabled?: boolean;
   status?: 'active' | 'inactive';
 }) {
   const db = await getDb();
@@ -1433,6 +1434,11 @@ export async function calculateParkingFeeWithTimePeriods(
         totalAmount += periodAmount;
       }
     }
+    
+    // 1日最大料金を適用（有効な場合）
+    if (lot.maxDailyAmountEnabled && lot.maxDailyAmount && lot.maxDailyAmount > 0) {
+      totalAmount = Math.min(totalAmount, lot.maxDailyAmount);
+    }
   } else {
     // 24時間を超える駐車：24時間ごとに分割して計算
     let currentTime = new Date(entryTime);
@@ -1465,6 +1471,11 @@ export async function calculateParkingFeeWithTimePeriods(
       
       if (maxAmountFor24Hours > 0) {
         periodAmount = Math.min(periodAmount, maxAmountFor24Hours);
+      }
+      
+      // 1日最大料金を適用（有効な場合）
+      if (lot.maxDailyAmountEnabled && lot.maxDailyAmount && lot.maxDailyAmount > 0) {
+        periodAmount = Math.min(periodAmount, lot.maxDailyAmount);
       }
       
       totalAmount += periodAmount;

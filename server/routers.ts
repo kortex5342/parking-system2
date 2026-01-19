@@ -940,6 +940,7 @@ export const appRouter = router({
         pricingUnitMinutes: z.number().min(10).max(60).optional(),
         pricingAmount: z.number().min(1).optional(),
         maxDailyAmount: z.number().min(1).optional().nullable(),
+        maxDailyAmountEnabled: z.boolean().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const lot = await getParkingLotById(input.lotId);
@@ -1174,6 +1175,7 @@ export const appRouter = router({
         pricingUnitMinutes: z.number().default(60),
         pricingAmount: z.number().default(300),
         maxDailyAmount: z.number().default(3000),
+        maxDailyAmountEnabled: z.boolean().default(true),
       }))
       .mutation(async ({ input }) => {
         const owner = await getUserById(input.ownerId);
@@ -1193,6 +1195,7 @@ export const appRouter = router({
           pricingUnitMinutes: input.pricingUnitMinutes,
           pricingAmount: input.pricingAmount,
           maxDailyAmount: input.maxDailyAmount,
+          maxDailyAmountEnabled: input.maxDailyAmountEnabled,
         });
         
         // 駐車スペースを初期化
