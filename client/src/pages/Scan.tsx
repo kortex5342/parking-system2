@@ -58,6 +58,8 @@ export default function Scan() {
     const savedToken = localStorage.getItem("parkingSessionToken");
     if (savedToken) {
       setSessionToken(savedToken);
+      // 保存されたセッションがある場合は、出庫確認画面に自動遷移
+      setView("exit-confirm");
     }
   }, []);
 
