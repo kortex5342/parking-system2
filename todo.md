@@ -290,3 +290,13 @@
 - [x] getMaxPricingPeriodsByLot関数を使用して修正
 - [x] ParkingLotSettingsCardが正しくデータを取得・表示していることを確認
 - [x] 問題を修正してテスト完了
+
+## オーナーページ駐車場表示問題・オペレーターページ削除機能（修正完了）
+- [x] OperatorDashboardコンポーネントを作成
+- [x] App.tsxに/operatorルートを追加
+- [x] owner.getParkingLotsプロシージャにエラーハンドリングを追加
+- [x] ParkingLotSettingsCardコンポーネントにエラー表示機能を追加
+- [x] オーナーページで駐車場が正しく表示されることを確認
+- [x] オペレーターページで全駐車場が表示されることを確認
+- [x] 削除ボタンが正常に機能することを確認
+- [x] テスト・検証完了

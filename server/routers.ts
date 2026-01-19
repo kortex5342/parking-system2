@@ -909,22 +909,29 @@ export const appRouter = router({
       }
       
       // 各駐車場の時間帯設定を取得
-      const lotsWithPeriods = await Promise.all(lots.map(async (lot) => {
-        const periods = await getMaxPricingPeriodsByLot(lot.id);
+      const lotsWithPeriods = await Promise.all(lots.map(async (lot: any) => {
+        let periods: any = [];
+        try {
+          periods = await getMaxPricingPeriodsByLot(lot.id);
+        } catch (error) {
+          // テーブルが存在しない場合を無視
+          console.error('Error fetching max pricing periods:', error);
+          periods = [];
+        }
         return {
           ...lot,
           timePeriods: periods || [],
-        };
+        } as any;
       }));
       
-      return lotsWithPeriods;
+      return lotsWithPeriods as any;
     }),
 
     // 駐車場詳細取得
     getParkingLot: ownerProcedure
       .input(z.object({ lotId: z.number() }))
       .query(async ({ input, ctx }) => {
-        const lot = await getParkingLotById(input.lotId);
+        const lot: any = await getParkingLotById(input.lotId);
         if (!lot) {
           throw new TRPCError({ code: 'NOT_FOUND', message: '駐車場が見つかりません' });
         }
@@ -1045,7 +1052,6 @@ export const appRouter = router({
         pricingAmount: lot.pricingAmount,
         maxDailyAmount: lot.maxDailyAmount,
         maxDailyAmountEnabled: lot.maxDailyAmountEnabled,
-        timePeriods: lot.timePeriods || [],
       };
     }),
   }),

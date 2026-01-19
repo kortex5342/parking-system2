@@ -1,0 +1,70 @@
+{
+  "query": "SELECT id, ownerId, name, address FROM parking_lots LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 8EBibrbXjhAM6dQ.6d02bcfef11f --database hSBncNyCDqpD2yXpmwmJaw --execute SELECT id, ownerId, name, address FROM parking_lots LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "ownerId": "1",
+      "name": "テスト駐車場1",
+      "address": "仙台市青葉区上杉1-13-30スマンション上杉1丁目401"
+    },
+    {
+      "id": "30001",
+      "ownerId": "540187",
+      "name": "テスト駐車場2",
+      "address": "東京都渋谷区"
+    },
+    {
+      "id": "60001",
+      "ownerId": "1",
+      "name": "テスト駐車場",
+      "address": "NULL"
+    },
+    {
+      "id": "60002",
+      "ownerId": "1",
+      "name": "テスト駐車場（時間帯設定なし）",
+      "address": "NULL"
+    },
+    {
+      "id": "60003",
+      "ownerId": "1",
+      "name": "テスト駐車場",
+      "address": "NULL"
+    },
+    {
+      "id": "60004",
+      "ownerId": "1",
+      "name": "テスト駐車場（時間帯設定なし）",
+      "address": "NULL"
+    },
+    {
+      "id": "60005",
+      "ownerId": "1",
+      "name": "テスト駐車場",
+      "address": "NULL"
+    },
+    {
+      "id": "60006",
+      "ownerId": "1",
+      "name": "テスト駐車場",
+      "address": "NULL"
+    },
+    {
+      "id": "60007",
+      "ownerId": "1",
+      "name": "テスト駐車場",
+      "address": "NULL"
+    },
+    {
+      "id": "60008",
+      "ownerId": "1",
+      "name": "テスト駐車場（時間帯設定なし）",
+      "address": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\townerId\tname\taddress\n1\t1\tテスト駐車場1\t仙台市青葉区上杉1-13-30スマンション上杉1丁目401\n30001\t540187\tテスト駐車場2\t東京都渋谷区\n60001\t1\tテスト駐車場\tNULL\n60002\t1\tテスト駐車場（時間帯設定なし）\tNULL\n60003\t1\tテスト駐車場\tNULL\n60004\t1\tテスト駐車場（時間帯設定なし）\tNULL\n60005\t1\tテスト駐車場\tNULL\n60006\t1\tテスト駐車場\tNULL\n60007\t1\tテスト駐車場\tNULL\n60008\t1\tテスト駐車場（時間帯設定なし）\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 1499
+}

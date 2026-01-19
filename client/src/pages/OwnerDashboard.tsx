@@ -489,7 +489,20 @@ function ProfileTab() {
 
 // 駐車場設定カード（読み取り専用）
 function ParkingLotSettingsCard() {
-  const { data: parkingLots, isLoading } = trpc.owner.getParkingLots.useQuery();
+  const { data: parkingLots, isLoading, error } = trpc.owner.getParkingLots.useQuery();
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>駐車場設定</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-red-500">エラーが発生しました: {error.message}</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (isLoading) {
     return (

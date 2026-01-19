@@ -1,0 +1,15 @@
+{
+  "query": "SELECT id, openId, name FROM users WHERE name = 'KK K' LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 8EBibrbXjhAM6dQ.6d02bcfef11f --database hSBncNyCDqpD2yXpmwmJaw --execute SELECT id, openId, name FROM users WHERE name = 'KK K' LIMIT 5;",
+  "rows": [
+    {
+      "id": "1",
+      "openId": "UjDqGQiK8oLXLmNmkD8NJX",
+      "name": "KK K"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\topenId\tname\n1\tUjDqGQiK8oLXLmNmkD8NJX\tKK K\n",
+  "stderr": "",
+  "execution_time_ms": 1533
+}
