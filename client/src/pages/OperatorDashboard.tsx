@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRoute } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -349,19 +349,16 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
           </div>
 
           <div>
-            <Label htmlFor="pricingUnitMinutes">料金計算単位（分）</Label>
-            <select
+            <Label htmlFor="pricingUnitMinutes">料金計算単位（分、10分単位）</Label>
+            <Input
               id="pricingUnitMinutes"
-              className="w-full px-3 py-2 border border-input rounded-md bg-background"
+              type="number"
+              min="10"
+              step="10"
               value={formData.pricingUnitMinutes}
               onChange={(e) => setFormData({ ...formData, pricingUnitMinutes: parseInt(e.target.value) })}
-            >
-              <option value="30">30分</option>
-              <option value="60">1時間</option>
-              <option value="120">2時間</option>
-              <option value="240">4時間</option>
-              <option value="1440">1日</option>
-            </select>
+              placeholder="例：30、60、120"
+            />
           </div>
 
           <div>
@@ -386,6 +383,18 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
               value={formData.maxDailyAmount}
               onChange={(e) => setFormData({ ...formData, maxDailyAmount: parseInt(e.target.value) })}
             />
+          </div>
+
+          {/* 時間帯ごとの最大料金セクション */}
+          <div className="border-t pt-4 mt-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold">時間帯ごとの最大料金</h3>
+              <Button type="button" variant="outline" size="sm">
+                追加
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">例：19時～5時は最大1300円、5時～19時は最大3000円</p>
+            <MaxPricingPeriodsTable lotId={lotId} />
           </div>
 
           <DialogFooter>
@@ -620,19 +629,16 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
           </div>
 
           <div>
-            <Label htmlFor="pricingUnitMinutes">料金計算単位（分）</Label>
-            <select
+            <Label htmlFor="pricingUnitMinutes">料金計算単位（分、10分単位）</Label>
+            <Input
               id="pricingUnitMinutes"
-              className="w-full px-3 py-2 border border-input rounded-md bg-background"
+              type="number"
+              min="10"
+              step="10"
               value={formData.pricingUnitMinutes}
               onChange={(e) => setFormData({ ...formData, pricingUnitMinutes: parseInt(e.target.value) })}
-            >
-              <option value="30">30分</option>
-              <option value="60">1時間</option>
-              <option value="120">2時間</option>
-              <option value="240">4時間</option>
-              <option value="1440">1日</option>
-            </select>
+              placeholder="例：30、60、120"
+            />
           </div>
 
           <div>
@@ -659,6 +665,14 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
             />
           </div>
 
+          {/* 時間帯ごとの最大料金セクション */}
+          <div className="border-t pt-4 mt-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold">時間帯ごとの最大料金</h3>
+              <p className="text-sm text-muted-foreground">例：19時～5時は最大5００円</p>
+            </div>
+          </div>
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               キャンセル
@@ -670,5 +684,179 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+
+// 時間帯ごとの最大料金テーブルコンポーネント
+function MaxPricingPeriodsTable({ lotId }: { lotId: number | null }) {
+  const [periods, setPeriods] = useState<Array<{ id: number; startHour: number; endHour: number; maxAmount: number }>>([]);
+  const [isAddingPeriod, setIsAddingPeriod] = useState(false);
+  const [newPeriod, setNewPeriod] = useState({ startHour: 19, endHour: 5, maxAmount: 1300 });
+
+  const { data: maxPricingPeriods } = trpc.operator.getMaxPricingPeriods.useQuery(
+    { parkingLotId: lotId || 0 },
+    { enabled: !!lotId }
+  );
+
+  useEffect(() => {
+    if (maxPricingPeriods) {
+      setPeriods(maxPricingPeriods);
+    }
+  }, [maxPricingPeriods]);
+
+  const saveMutation = trpc.operator.saveMaxPricingPeriod.useMutation({
+    onSuccess: () => {
+      toast.success('時間帯ごとの最大料金を追加しました');
+      setIsAddingPeriod(false);
+      setNewPeriod({ startHour: 19, endHour: 5, maxAmount: 1300 });
+      if (lotId) {
+        trpc.useUtils().operator.getMaxPricingPeriods.invalidate({ parkingLotId: lotId });
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
+
+  const deleteMutation = trpc.operator.deleteMaxPricingPeriod.useMutation({
+    onSuccess: () => {
+      toast.success('時間帯ごとの最大料金を削除しました');
+      if (lotId) {
+        trpc.useUtils().operator.getMaxPricingPeriods.invalidate({ parkingLotId: lotId });
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
+
+  const handleAddPeriod = () => {
+    if (!lotId) return;
+    saveMutation.mutate({
+      parkingLotId: lotId,
+      startHour: newPeriod.startHour,
+      endHour: newPeriod.endHour,
+      maxAmount: newPeriod.maxAmount,
+    });
+  };
+
+  const handleDeletePeriod = (periodId: number) => {
+    deleteMutation.mutate({ periodId });
+  };
+
+  if (!lotId) return null;
+
+  return (
+    <div className="space-y-3">
+      {periods.length === 0 ? (
+        <p className="text-sm text-muted-foreground">時間帯ごとの最大料金が設定されていません</p>
+      ) : (
+        <div className="border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted">
+              <tr>
+                <th className="px-3 py-2 text-left">開始時間</th>
+                <th className="px-3 py-2 text-left">終了時間</th>
+                <th className="px-3 py-2 text-left">最大料金</th>
+                <th className="px-3 py-2 text-left">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {periods.map((period) => (
+                <tr key={period.id} className="border-t">
+                  <td className="px-3 py-2">{period.startHour}:00</td>
+                  <td className="px-3 py-2">{period.endHour}:00</td>
+                  <td className="px-3 py-2">¥{period.maxAmount}</td>
+                  <td className="px-3 py-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeletePeriod(period.id)}
+                      disabled={deleteMutation.isPending}
+                    >
+                      削除
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {isAddingPeriod && (
+        <div className="border rounded-lg p-3 space-y-3 bg-muted/50">
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label className="text-xs">開始時間</Label>
+              <select
+                className="w-full px-2 py-1 border border-input rounded text-sm bg-background"
+                value={newPeriod.startHour}
+                onChange={(e) => setNewPeriod({ ...newPeriod, startHour: parseInt(e.target.value) })}
+              >
+                {Array.from({ length: 24 }, (_, i) => (
+                  <option key={i} value={i}>{i}:00</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label className="text-xs">終了時間</Label>
+              <select
+                className="w-full px-2 py-1 border border-input rounded text-sm bg-background"
+                value={newPeriod.endHour}
+                onChange={(e) => setNewPeriod({ ...newPeriod, endHour: parseInt(e.target.value) })}
+              >
+                {Array.from({ length: 24 }, (_, i) => (
+                  <option key={i} value={i}>{i}:00</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label className="text-xs">最大料金（円）</Label>
+              <Input
+                type="number"
+                min="0"
+                step="100"
+                value={newPeriod.maxAmount}
+                onChange={(e) => setNewPeriod({ ...newPeriod, maxAmount: parseInt(e.target.value) })}
+                className="text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAddingPeriod(false)}
+            >
+              キャンセル
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleAddPeriod}
+              disabled={saveMutation.isPending}
+            >
+              {saveMutation.isPending ? '追加中...' : '追加'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {!isAddingPeriod && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setIsAddingPeriod(true)}
+          className="w-full"
+        >
+          新しい時間帯を追加
+        </Button>
+      )}
+    </div>
   );
 }
