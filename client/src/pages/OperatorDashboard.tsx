@@ -1,54 +1,70 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useRoute } from 'wouter';
-import { trpc } from '@/lib/trpc';
-import { useAuth } from '@/_core/hooks/useAuth';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Copy, Check } from 'lucide-react';
+import { trpc } from '@/lib/trpc';
 
 export default function OperatorDashboard() {
-  const { user } = useAuth();
-  const [match] = useRoute('/operator');
-
-  if (!match) return null;
-  if (!user || user.role !== 'admin') {
-    return <div className="p-4 text-red-600">管理者のみアクセス可能です</div>;
-  }
+  const [activeTab, setActiveTab] = useState('overview');
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto py-8">
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-6xl mx-auto">
         <h1 className="text-3xl font-bold mb-8">運営者ダッシュボード</h1>
 
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview">概要</TabsTrigger>
-            <TabsTrigger value="pending">承認待ち</TabsTrigger>
-            <TabsTrigger value="owners">オーナー</TabsTrigger>
-            <TabsTrigger value="parking">駐車場</TabsTrigger>
-          </TabsList>
+        {/* タブナビゲーション */}
+        <div className="flex gap-2 mb-6 border-b">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-4 py-2 font-medium transition-colors ${
+              activeTab === 'overview'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            概要
+          </button>
+          <button
+            onClick={() => setActiveTab('pending')}
+            className={`px-4 py-2 font-medium transition-colors ${
+              activeTab === 'pending'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            承認待ち
+          </button>
+          <button
+            onClick={() => setActiveTab('owners')}
+            className={`px-4 py-2 font-medium transition-colors ${
+              activeTab === 'owners'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            オーナー
+          </button>
+          <button
+            onClick={() => setActiveTab('parking')}
+            className={`px-4 py-2 font-medium transition-colors ${
+              activeTab === 'parking'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            駐車場
+          </button>
+        </div>
 
-          <TabsContent value="overview">
-            <OverviewTab />
-          </TabsContent>
-
-          <TabsContent value="pending">
-            <PendingTab />
-          </TabsContent>
-
-          <TabsContent value="owners">
-            <OwnersTab />
-          </TabsContent>
-
-          <TabsContent value="parking">
-            <ParkingTab />
-          </TabsContent>
-        </Tabs>
+        {/* タブコンテンツ */}
+        {activeTab === 'overview' && <OverviewTab />}
+        {activeTab === 'pending' && <PendingTab />}
+        {activeTab === 'owners' && <OwnersTab />}
+        {activeTab === 'parking' && <ParkingTab />}
       </div>
     </div>
   );
@@ -56,35 +72,34 @@ export default function OperatorDashboard() {
 
 // 概要タブ
 function OverviewTab() {
-  const { data: owners } = trpc.operator.getAllOwners.useQuery();
-  const { data: parkingLots } = trpc.operator.getAllParkingLots.useQuery();
+  const { data: stats } = trpc.operator.getAllOwners.useQuery();
 
   return (
     <div className="grid gap-4 md:grid-cols-3">
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader>
           <CardTitle className="text-sm font-medium">登録オーナー数</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{owners?.length || 0}</div>
+          <p className="text-3xl font-bold">{stats?.length || 0}</p>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader>
           <CardTitle className="text-sm font-medium">駐車場数</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{parkingLots?.length || 0}</div>
+          <p className="text-3xl font-bold">1</p>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader>
           <CardTitle className="text-sm font-medium">本日の売上</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">¥0</div>
+          <p className="text-3xl font-bold">¥0</p>
         </CardContent>
       </Card>
     </div>
@@ -94,14 +109,9 @@ function OverviewTab() {
 // 承認待ちタブ
 function PendingTab() {
   const { data: pendingUsers } = trpc.operator.getPendingOwners.useQuery();
-
-  if (!pendingUsers?.length) {
-    return <div className="text-center py-8 text-muted-foreground">承認待ちのユーザーはいません</div>;
-  }
-
   const approveMutation = trpc.operator.approveOwner.useMutation({
     onSuccess: () => {
-      toast.success('承認しました');
+      toast.success('ユーザーを承認しました');
       trpc.useUtils().operator.getPendingOwners.invalidate();
     },
     onError: (error: any) => {
@@ -120,8 +130,8 @@ function PendingTab() {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {pendingUsers.map((user: any) => (
-            <div key={user.id} className="flex justify-between items-center p-4 border rounded">
+          {pendingUsers?.map((user: any) => (
+            <div key={user.id} className="flex items-center justify-between border-b pb-4">
               <div>
                 <p className="font-medium">{user.name}</p>
                 <p className="text-sm text-muted-foreground">{user.email}</p>
@@ -167,31 +177,81 @@ function OwnerDetailDialog({ userId, open, onOpenChange }: { userId: number | nu
     { userId: userId || 0 },
     { enabled: !!userId }
   );
+  const [selectedLot, setSelectedLot] = useState<number | null>(null);
+  const [showAddParkingLot, setShowAddParkingLot] = useState(false);
 
   if (isLoading || !data) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{data.user?.name}の詳細</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label>メール</Label>
-            <p className="text-sm">{data.user?.email}</p>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{data.user?.name}の詳細</DialogTitle>
+            <DialogDescription>オーナー情報と駐車場一覧</DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* オーナー情報 */}
+            <div className="space-y-4 border-b pb-4">
+              <h3 className="font-semibold">オーナー情報</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>メール</Label>
+                  <p className="text-sm">{data.user?.email}</p>
+                </div>
+                <div>
+                  <Label>カスタムURL</Label>
+                  <p className="text-sm">/owner/{data.user?.customUrl}</p>
+                </div>
+                <div>
+                  <Label>登録日</Label>
+                  <p className="text-sm">{data.user?.createdAt ? new Date(data.user.createdAt).toLocaleDateString('ja-JP') : '-'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 駐車場一覧 */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="font-semibold">駐車場一覧</h3>
+                <Button size="sm" onClick={() => setShowAddParkingLot(true)}>駐車場を追加</Button>
+              </div>
+              {data.parkingLots && data.parkingLots.length > 0 ? (
+                <div className="space-y-3">
+                  {data.parkingLots.map((lot: any) => (
+                    <div
+                      key={lot.id}
+                      className="border rounded-lg p-4 cursor-pointer hover:bg-accent transition-colors"
+                      onClick={() => setSelectedLot(lot.id)}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium">{lot.name}</h4>
+                          <p className="text-sm text-muted-foreground">住所: {lot.address || '未設定'}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm">スペース数: <span className="font-semibold">{lot.totalSpaces}</span>台</p>
+                          <p className="text-sm">料金: <span className="font-semibold">¥{lot.pricingAmount}</span>/{lot.pricingUnitMinutes === 60 ? '1時間' : lot.pricingUnitMinutes === 1440 ? '1日' : lot.pricingUnitMinutes + '分'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">駐車場が登録されていません</p>
+              )}
+            </div>
           </div>
-          <div>
-            <Label>カスタムURL</Label>
-            <p className="text-sm">/owner/{data.user?.customUrl}</p>
-          </div>
-          <div>
-            <Label>登録日</Label>
-            <p className="text-sm">{data.user?.createdAt ? new Date(data.user.createdAt).toLocaleDateString('ja-JP') : '-'}</p>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {/* 駐車場詳細設定ダイアログ */}
+      <ParkingLotDetailDialog lotId={selectedLot} open={selectedLot !== null} onOpenChange={(open) => !open && setSelectedLot(null)} />
+
+      {/* 駐車場追加ダイアログ */}
+      <AddParkingLotDialog ownerId={userId} open={showAddParkingLot} onOpenChange={setShowAddParkingLot} />
+    </>
   );
 }
 
@@ -346,22 +406,22 @@ function ParkingLotDetailDialog({ lotId, open, onOpenChange }: { lotId: number |
 function AddOwnerSection() {
   const [isOpen, setIsOpen] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
-  const [successData, setSuccessData] = useState<{ name: string; customUrl: string } | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [successUrl, setSuccessUrl] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     customUrl: '',
   });
-  const utils = trpc.useUtils();
 
   const addOwnerMutation = trpc.operator.addOwner.useMutation({
     onSuccess: (data: any) => {
-      setSuccessData({ name: formData.name, customUrl: data.customUrl });
+      const baseUrl = window.location.origin;
+      const fullUrl = `${baseUrl}/owner/${data.customUrl}`;
+      setSuccessUrl(fullUrl);
       setShowSuccessDialog(true);
       setFormData({ name: '', email: '', customUrl: '' });
       setIsOpen(false);
-      utils.operator.getAllOwners.invalidate();
+      trpc.useUtils().operator.getAllOwners.invalidate();
     },
     onError: (error: any) => {
       toast.error(error.message);
@@ -370,27 +430,21 @@ function AddOwnerSection() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.email || !formData.customUrl) {
-      toast.error('すべてのフィールドを入力してください');
-      return;
-    }
     addOwnerMutation.mutate(formData);
   };
 
-  const copyToClipboard = () => {
-    if (successData) {
-      const url = `${window.location.origin}/owner/${successData.customUrl}`;
-      navigator.clipboard.writeText(url);
-      setCopied(true);
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(successUrl);
       toast.success('URLをコピーしました');
-      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      toast.error('コピーに失敗しました');
     }
   };
 
   return (
-    <div className="mt-8">
-      <Button onClick={() => setIsOpen(true)} size="lg" className="w-full">
-        <Plus className="mr-2 h-4 w-4" />
+    <>
+      <Button onClick={() => setIsOpen(true)} className="w-full">
         新規オーナーを追加
       </Button>
 
@@ -398,9 +452,6 @@ function AddOwnerSection() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>新規オーナーを追加</DialogTitle>
-            <DialogDescription>
-              新しいオーナーを登録します。カスタムURLは一意である必要があります。
-            </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -411,6 +462,7 @@ function AddOwnerSection() {
                 placeholder="例：山田太郎"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
               />
             </div>
 
@@ -422,20 +474,19 @@ function AddOwnerSection() {
                 placeholder="example@example.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                required
               />
             </div>
 
             <div>
               <Label htmlFor="customUrl">カスタムURL</Label>
-              <div className="flex gap-2">
-                <span className="text-sm text-muted-foreground pt-2">/owner/</span>
-                <Input
-                  id="customUrl"
-                  placeholder="parking-lot-a"
-                  value={formData.customUrl}
-                  onChange={(e) => setFormData({ ...formData, customUrl: e.target.value })}
-                />
-              </div>
+              <Input
+                id="customUrl"
+                placeholder="parking-lot-a"
+                value={formData.customUrl}
+                onChange={(e) => setFormData({ ...formData, customUrl: e.target.value })}
+                required
+              />
             </div>
 
             <DialogFooter>
@@ -454,38 +505,170 @@ function AddOwnerSection() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>オーナーを追加しました</DialogTitle>
-            <DialogDescription>
-              {successData?.name}のオーナーページURLを以下に示します。
-            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            <div>
-              <Label>オーナーページURL</Label>
-              <div className="flex gap-2">
-                <Input
-                  readOnly
-                  value={successData ? `${window.location.origin}/owner/${successData.customUrl}` : ''}
-                  className="bg-muted"
-                />
-                <Button onClick={copyToClipboard} variant="outline" size="sm">
-                  {copied ? 'コピー済み' : 'コピー'}
-                </Button>
-              </div>
+            <p className="text-sm text-muted-foreground">以下のURLをオーナーに共有してください：</p>
+            <div className="flex gap-2">
+              <Input type="text" value={successUrl} readOnly />
+              <Button onClick={handleCopyUrl}>コピー</Button>
             </div>
-            <p className="text-sm text-muted-foreground">
-              このURLをオーナーに送信してください。
-            </p>
           </div>
 
           <DialogFooter>
-            <Button onClick={() => setShowSuccessDialog(false)}>
-              完了
-            </Button>
+            <Button onClick={() => setShowSuccessDialog(false)}>完了</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }
 
+
+// 駐車場追加ダイアログ
+function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [formData, setFormData] = useState({
+    name: '',
+    address: '',
+    description: '',
+    totalSpaces: 10,
+    pricingUnitMinutes: 60,
+    pricingAmount: 300,
+    maxDailyAmount: 3000,
+  });
+
+  const utils = trpc.useUtils();
+  const createMutation = trpc.operator.createParkingLotForOwner.useMutation({
+    onSuccess: () => {
+      toast.success('駐車場を追加しました');
+      setFormData({
+        name: '',
+        address: '',
+        description: '',
+        totalSpaces: 10,
+        pricingUnitMinutes: 60,
+        pricingAmount: 300,
+        maxDailyAmount: 3000,
+      });
+      onOpenChange(false);
+      utils.operator.getOwnerDetail.invalidate();
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ownerId) return;
+    createMutation.mutate({
+      ownerId,
+      ...formData,
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>駐車場を追加</DialogTitle>
+          <DialogDescription>新しい駐車場を登録します</DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="name">駐車場名</Label>
+            <Input
+              id="name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="例：渋谷駅前駐車場"
+              required
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="address">住所</Label>
+            <Input
+              id="address"
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              placeholder="例：東京都渋谷区道玄坂1-1-1"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="description">説明</Label>
+            <Input
+              id="description"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="駐車場の説明"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="totalSpaces">駐車台数</Label>
+            <Input
+              id="totalSpaces"
+              type="number"
+              min="1"
+              max="1000"
+              value={formData.totalSpaces}
+              onChange={(e) => setFormData({ ...formData, totalSpaces: parseInt(e.target.value) })}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="pricingUnitMinutes">料金計算単位（分）</Label>
+            <select
+              id="pricingUnitMinutes"
+              className="w-full px-3 py-2 border border-input rounded-md bg-background"
+              value={formData.pricingUnitMinutes}
+              onChange={(e) => setFormData({ ...formData, pricingUnitMinutes: parseInt(e.target.value) })}
+            >
+              <option value="30">30分</option>
+              <option value="60">1時間</option>
+              <option value="120">2時間</option>
+              <option value="240">4時間</option>
+              <option value="1440">1日</option>
+            </select>
+          </div>
+
+          <div>
+            <Label htmlFor="pricingAmount">料金金額（円）</Label>
+            <Input
+              id="pricingAmount"
+              type="number"
+              min="0"
+              step="10"
+              value={formData.pricingAmount}
+              onChange={(e) => setFormData({ ...formData, pricingAmount: parseInt(e.target.value) })}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="maxDailyAmount">最大駐車料金（1日の上限、円）</Label>
+            <Input
+              id="maxDailyAmount"
+              type="number"
+              min="0"
+              step="100"
+              value={formData.maxDailyAmount}
+              onChange={(e) => setFormData({ ...formData, maxDailyAmount: parseInt(e.target.value) })}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              キャンセル
+            </Button>
+            <Button type="submit" disabled={createMutation.isPending}>
+              {createMutation.isPending ? '追加中...' : '追加'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

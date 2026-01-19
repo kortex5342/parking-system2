@@ -1142,6 +1142,44 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // 管理者がオーナーのために駐車場を作成
+    createParkingLotForOwner: adminProcedure
+      .input(z.object({
+        ownerId: z.number(),
+        name: z.string().min(1),
+        address: z.string().optional(),
+        description: z.string().optional(),
+        totalSpaces: z.number().min(1).max(1000).default(10),
+        pricingUnitMinutes: z.number().default(60),
+        pricingAmount: z.number().default(300),
+        maxDailyAmount: z.number().default(3000),
+      }))
+      .mutation(async ({ input }) => {
+        const owner = await getUserById(input.ownerId);
+        if (!owner) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'オーナーが見つかりません' });
+        }
+        
+        const lotId = await createParkingLot({
+          ownerId: input.ownerId,
+          name: input.name,
+          address: input.address,
+          description: input.description,
+          totalSpaces: input.totalSpaces,
+        });
+        
+        await updateParkingLot(lotId, {
+          pricingUnitMinutes: input.pricingUnitMinutes,
+          pricingAmount: input.pricingAmount,
+          maxDailyAmount: input.maxDailyAmount,
+        });
+        
+        // 駐車スペースを初期化
+        await initializeParkingSpacesForLot(lotId, input.totalSpaces);
+        
+        return { success: true, lotId };
+      }),
+
     // 決済方法一覧取得（運営者用）
     getPaymentMethods: adminProcedure
       .input(z.object({ lotId: z.number() }))
