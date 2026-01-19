@@ -607,25 +607,59 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
   ]);
 
   const utils = trpc.useUtils();
+  const saveMaxPricingPeriodMutation = trpc.operator.saveMaxPricingPeriod.useMutation();
   const createMutation = trpc.operator.createParkingLotForOwner.useMutation({
-    onSuccess: () => {
-      toast.success('駐車場を追加しました');
-      setFormData({
-        name: '',
-        address: '',
-        description: '',
-        totalSpaces: 10,
-        pricingUnitMinutes: 60,
-        pricingAmount: 300,
-        maxDailyAmount: 3000,
-        maxDailyAmountEnabled: true,
-      });
-      setTimePeriods([
-        { startHour: 5, endHour: 19, maxAmount: 3000 },
-        { startHour: 19, endHour: 5, maxAmount: 1300 },
-      ]);
-      onOpenChange(false);
-      utils.operator.getOwnerDetail.invalidate();
+    onSuccess: (response) => {
+      if (response && response.lotId) {
+        // 時間帯設定を並列並列で保存
+        Promise.all(timePeriods.map(period =>
+          saveMaxPricingPeriodMutation.mutateAsync({
+            parkingLotId: response.lotId,
+            startHour: period.startHour,
+            endHour: period.endHour,
+            maxAmount: period.maxAmount,
+          })
+        )).then(() => {
+          toast.success('駐車場を追加しました');
+          setFormData({
+            name: '',
+            address: '',
+            description: '',
+            totalSpaces: 10,
+            pricingUnitMinutes: 60,
+            pricingAmount: 300,
+            maxDailyAmount: 3000,
+            maxDailyAmountEnabled: true,
+          });
+          setTimePeriods([
+            { startHour: 5, endHour: 19, maxAmount: 3000 },
+            { startHour: 19, endHour: 5, maxAmount: 1300 },
+          ]);
+          onOpenChange(false);
+          utils.operator.getOwnerDetail.invalidate();
+        }).catch((error) => {
+          toast.error('時間帯設定の保存に失敗しました');
+          console.error('Error saving periods:', error);
+        });
+      } else {
+        toast.success('駐車場を追加しました');
+        setFormData({
+          name: '',
+          address: '',
+          description: '',
+          totalSpaces: 10,
+          pricingUnitMinutes: 60,
+          pricingAmount: 300,
+          maxDailyAmount: 3000,
+          maxDailyAmountEnabled: true,
+        });
+        setTimePeriods([
+          { startHour: 5, endHour: 19, maxAmount: 3000 },
+          { startHour: 19, endHour: 5, maxAmount: 1300 },
+        ]);
+        onOpenChange(false);
+        utils.operator.getOwnerDetail.invalidate();
+      }
     },
     onError: (error: any) => {
       toast.error(error.message);
@@ -636,27 +670,11 @@ function AddParkingLotDialog({ ownerId, open, onOpenChange }: { ownerId: number 
     e.preventDefault();
     if (!ownerId) return;
     
-    try {
-      const response = await createMutation.mutateAsync({
-        ownerId,
-        ...formData,
-        maxDailyAmount: formData.maxDailyAmountEnabled ? formData.maxDailyAmount : 0,
-      });
-      
-      if (response && response.lotId) {
-        const savePeriodMutation = trpc.operator.saveMaxPricingPeriod.useMutation();
-        for (const period of timePeriods) {
-          savePeriodMutation.mutate({
-            parkingLotId: response.lotId,
-            startHour: period.startHour,
-            endHour: period.endHour,
-            maxAmount: period.maxAmount,
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    }
+    createMutation.mutate({
+      ownerId,
+      ...formData,
+      maxDailyAmount: formData.maxDailyAmountEnabled ? formData.maxDailyAmount : 0,
+    });
   };
 
   return (
