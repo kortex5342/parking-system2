@@ -1015,6 +1015,25 @@ export const appRouter = router({
         await updateBankInfo(ctx.user.id, input);
         return { success: true };
       }),
+
+    // 駐車場情報取得（読み取り専用）
+    getParkingLotInfo: ownerProcedure.query(async ({ ctx }) => {
+      const parkingLots = await getParkingLotsByOwner(ctx.user.id);
+      if (parkingLots.length === 0) {
+        return null;
+      }
+      const lot = parkingLots[0];
+      return {
+        id: lot.id,
+        name: lot.name,
+        totalSpaces: lot.totalSpaces,
+        pricingUnitMinutes: lot.pricingUnitMinutes,
+        pricingAmount: lot.pricingAmount,
+        maxDailyAmount: lot.maxDailyAmount,
+        maxDailyAmountEnabled: lot.maxDailyAmountEnabled,
+        timePeriods: lot.timePeriods || [],
+      };
+    }),
   }),
 
   // ========== 運営者向けAPI ==========

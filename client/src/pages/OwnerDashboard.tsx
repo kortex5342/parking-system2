@@ -481,6 +481,113 @@ function ProfileTab() {
           </div>
         </CardContent>
       </Card>
+
+      <ParkingLotSettingsCard />
     </div>
+  );
+}
+
+// 駐車場設定カード（読み取り専用）
+function ParkingLotSettingsCard() {
+  const { data: parkingLot, isLoading } = trpc.owner.getParkingLotInfo.useQuery();
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>駐車場設定</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!parkingLot) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>駐車場設定</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">駐車場情報が見つかりません</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>駐車場設定</CardTitle>
+        <CardDescription>管理者が設定した駐車場の仕様（読み取り専用）</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* 駐車台数 */}
+        <div className="p-4 bg-muted rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <Building2 className="h-4 w-4 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">駐車台数</p>
+          </div>
+          <p className="text-2xl font-semibold">{parkingLot.totalSpaces}台</p>
+        </div>
+
+        {/* 料金設定 */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <p className="font-semibold">料金設定</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-xs text-muted-foreground">計算単位</p>
+              <p className="font-medium">{parkingLot.pricingUnitMinutes}分</p>
+            </div>
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-xs text-muted-foreground">料金</p>
+              <p className="font-medium">¥{parkingLot.pricingAmount}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 最大駐車料金 */}
+        {parkingLot.maxDailyAmountEnabled && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <CircleDollarSign className="h-4 w-4 text-muted-foreground" />
+              <p className="font-semibold">1日の最大駐車料金</p>
+            </div>
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="font-medium text-lg">¥{parkingLot.maxDailyAmount}</p>
+            </div>
+          </div>
+        )}
+
+        {/* 時間帯ごとの最大料金 */}
+        {parkingLot.timePeriods && parkingLot.timePeriods.length > 0 && (
+          <div className="space-y-3">
+            <p className="font-semibold">時間帯ごとの最大料金</p>
+            <div className="space-y-2">
+              {parkingLot.timePeriods.map((period: any, index: number) => (
+                <div key={index} className="p-3 bg-muted rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    {period.startHour}:00 ～ {period.endHour}:00
+                  </p>
+                  <p className="font-medium">¥{period.maxAmount}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <Separator />
+        <p className="text-xs text-muted-foreground">
+          ※ 駐車場の設定は管理者により管理されています。変更が必要な場合は、管理者にお問い合わせください。
+        </p>
+      </CardContent>
+    </Card>
   );
 }
