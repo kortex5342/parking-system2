@@ -45,6 +45,8 @@ export const users = mysqlTable("users", {
   accountType: mysqlEnum("accountType", ["checking", "savings"]),
   accountNumber: varchar("accountNumber", { length: 20 }),
   accountHolder: varchar("accountHolder", { length: 100 }),
+  // オーナー用カスタムURL
+  customUrl: varchar("customUrl", { length: 100 }).unique(),
 });
 
 export type User = typeof users.$inferSelect;

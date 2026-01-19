@@ -57,6 +57,13 @@
       "when": 1768810260988,
       "tag": "0007_yummy_omega_flight",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1768814507408,
+      "tag": "0008_goofy_oracle",
+      "breakpoints": true
     }
   ]
 }

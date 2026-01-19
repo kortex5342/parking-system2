@@ -7,6 +7,10 @@ import { TRPCError } from "@trpc/server";
 import Stripe from "stripe";
 import {
   initializeParkingSpaces,
+  getOwnerByCustomUrl,
+  createOwner,
+  updateOwnerCustomUrl,
+  checkCustomUrlExists,
   getAllParkingSpaces,
   getParkingSpaceByQrCode,
   getParkingSpaceByNumber,
@@ -1201,6 +1205,55 @@ export const appRouter = router({
     getPayoutSchedules: ownerProcedure.query(async ({ ctx }) => {
       return await getPayoutSchedulesByOwner(ctx.user.id);
     }),
+
+    // 新規オーナー追加
+    createOwner: adminProcedure
+      .input(z.object({
+        name: z.string(),
+        email: z.string().email(),
+        customUrl: z.string().min(3).max(100),
+      }))
+      .mutation(async ({ input }) => {
+        // カスタムURLの重複確認
+        const exists = await checkCustomUrlExists(input.customUrl);
+        if (exists) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'このカスタムURLは既に使用されています' });
+        }
+        await createOwner(input);
+        return { success: true };
+      }),
+
+    // オーナー一覧取得
+    getOwnersList: adminProcedure.query(async () => {
+      return await getAllOwners();
+    }),
+
+    // カスタムURLでオーナー情報取得
+    getOwnerByCustomUrl: publicProcedure
+      .input(z.object({ customUrl: z.string() }))
+      .query(async ({ input }) => {
+        const owner = await getOwnerByCustomUrl(input.customUrl);
+        if (!owner) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'オーナーが見つかりません' });
+        }
+        return owner;
+      }),
+
+    // カスタムURLの変更
+    updateOwnerCustomUrl: adminProcedure
+      .input(z.object({
+        ownerId: z.number(),
+        customUrl: z.string().min(3).max(100),
+      }))
+      .mutation(async ({ input }) => {
+        // 新しいカスタムURLの重複確認
+        const exists = await checkCustomUrlExists(input.customUrl);
+        if (exists) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'このカスタムURLは既に使用されています' });
+        }
+        await updateOwnerCustomUrl(input.ownerId, input.customUrl);
+        return { success: true };
+      }),
   }),
 });
 

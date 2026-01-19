@@ -1193,3 +1193,66 @@ export async function updatePayoutSchedule(id: number, data: Partial<InsertPayou
     throw error;
   }
 }
+
+
+// ========== Owner Management ==========
+
+export async function getOwnerByCustomUrl(customUrl: string) {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    const result = await db.select().from(users)
+      .where(eq(users.customUrl, customUrl))
+      .limit(1);
+    return result[0] || null;
+  } catch (error) {
+    console.error("[Database] Error getting owner by custom URL:", error);
+    return null;
+  }
+}
+
+export async function createOwner(data: { name: string; email: string; customUrl: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  try {
+    const result = await db.insert(users).values({
+      openId: nanoid(),
+      name: data.name,
+      email: data.email,
+      role: "owner",
+      status: "active",
+      customUrl: data.customUrl,
+    });
+    return result;
+  } catch (error) {
+    console.error("[Database] Error creating owner:", error);
+    throw error;
+  }
+}
+
+export async function updateOwnerCustomUrl(ownerId: number, customUrl: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  try {
+    await db.update(users)
+      .set({ customUrl })
+      .where(eq(users.id, ownerId));
+  } catch (error) {
+    console.error("[Database] Error updating owner custom URL:", error);
+    throw error;
+  }
+}
+
+export async function checkCustomUrlExists(customUrl: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    const result = await db.select().from(users)
+      .where(eq(users.customUrl, customUrl))
+      .limit(1);
+    return result.length > 0;
+  } catch (error) {
+    console.error("[Database] Error checking custom URL:", error);
+    return false;
+  }
+}
