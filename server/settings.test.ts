@@ -164,7 +164,8 @@ describe("paymentSettings", () => {
 
       const result = await caller.paymentSettings.getAvailableMethods();
 
-      expect(result).toEqual({ card: "stripe", paypay: false });
+      // デモ版のため、常にデモ決済のみを返す
+      expect(result).toEqual({ card: null, paypay: false });
     });
   });
 });

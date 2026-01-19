@@ -766,24 +766,10 @@ export const appRouter = router({
     }),
 
     // 公開用: 利用可能な決済方法一覧
+    // デモ版: 常にデモモードを返す
     getAvailableMethods: publicProcedure.query(async () => {
-      const admin = await getAdminUser();
-      if (!admin) {
-        return { card: null, paypay: false };
-      }
-
-      let cardProvider: 'stripe' | 'square' | null = null;
-      
-      if (admin.cardPaymentProvider === 'stripe' && admin.stripeConnected) {
-        cardProvider = 'stripe';
-      } else if (admin.cardPaymentProvider === 'square' && admin.squareConnected) {
-        cardProvider = 'square';
-      }
-
-      return {
-        card: cardProvider,
-        paypay: admin.paypayConnected,
-      };
+      // デモ版のため、常にデモ決済のみを返す
+      return { card: null, paypay: false };
     }),
   }),
 

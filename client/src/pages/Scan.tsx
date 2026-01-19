@@ -618,10 +618,10 @@ function PaymentView({
 
   const isProcessing = paymentMutation.isPending || stripeCheckoutMutation.isPending || squareCheckoutMutation.isPending || paypayCheckoutMutation.isPending;
 
-  // 利用可能な決済方法を判定
-  const hasRealCardPayment = availableMethods?.card !== null;
-  const hasRealPayPay = availableMethods?.paypay === true;
-  const cardProvider = availableMethods?.card;
+  // デモ版: 常にデモ決済のみ表示
+  const hasRealCardPayment = false;
+  const hasRealPayPay = false;
+  const cardProvider = null;
 
   return (
     <div className="space-y-6">
