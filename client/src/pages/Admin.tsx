@@ -27,6 +27,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import QRCode from "qrcode";
 import { PaymentSettingsTab } from "@/components/PaymentSettingsTab";
+import { OwnerManagementTab } from "@/components/OwnerManagementTab";
 
 export default function Admin() {
   const { user, loading, isAuthenticated } = useAuth();
@@ -128,6 +129,10 @@ export default function Admin() {
                 <Wallet className="w-4 h-4" />
                 <span className="hidden sm:inline">決済設定</span>
               </TabsTrigger>
+              <TabsTrigger value="owners" className="gap-2">
+                <Settings className="w-4 h-4" />
+                <span className="hidden sm:inline">オーナー管理</span>
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="status">
@@ -148,6 +153,10 @@ export default function Admin() {
 
             <TabsContent value="settings">
               <PaymentSettingsTab />
+            </TabsContent>
+
+            <TabsContent value="owners">
+              <OwnerManagementTab />
             </TabsContent>
           </Tabs>
         </main>
