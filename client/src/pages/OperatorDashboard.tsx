@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,6 +79,37 @@ export default function OperatorDashboard() {
     { enabled: !!editLotData?.id && showEditLotDialog }
   );
 
+  // 時間帯設定が取得されたら編集フォームに反映
+  useEffect(() => {
+    if (editLotTimePeriods && editLotTimePeriods.length > 0) {
+      setEditTimePeriodEnabled(true);
+      // 昼間設定（5:00-19:00の範囲）
+      const dayPeriod = editLotTimePeriods.find(p => p.startHour >= 5 && p.startHour < 19);
+      // 夜間設定（19:00-5:00の範囲）
+      const nightPeriod = editLotTimePeriods.find(p => p.startHour >= 19 || p.startHour < 5);
+      
+      if (dayPeriod) {
+        setEditDayEnabled(true);
+        setEditDayStartHour(dayPeriod.startHour);
+        setEditDayEndHour(dayPeriod.endHour);
+        setEditDayMaxAmount(dayPeriod.maxAmount);
+      } else {
+        setEditDayEnabled(false);
+      }
+      
+      if (nightPeriod) {
+        setEditNightEnabled(true);
+        setEditNightStartHour(nightPeriod.startHour);
+        setEditNightEndHour(nightPeriod.endHour);
+        setEditNightMaxAmount(nightPeriod.maxAmount);
+      } else {
+        setEditNightEnabled(false);
+      }
+    } else {
+      setEditTimePeriodEnabled(false);
+    }
+  }, [editLotTimePeriods]);
+
   const deleteMutation = trpc.owner.deleteParkingLot.useMutation({
     onSuccess: () => {
       toast.success('駐車場を削除しました');
@@ -113,6 +144,25 @@ export default function OperatorDashboard() {
     },
     onError: (error: any) => {
       toast.error(`オーナー追加に失敗しました: ${error.message}`);
+    },
+  });
+
+  const updateParkingLotMutation = trpc.operator.updateParkingLot.useMutation({
+    onSuccess: () => {
+      toast.success('駐車場を更新しました');
+      setShowEditLotDialog(false);
+      // Invalidate queries to refresh data
+      try {
+        const utils = trpc.useUtils();
+        utils.operator.getAllParkingLots.invalidate();
+        utils.operator.getOwnerDetail.invalidate();
+        utils.operator.getMaxPricingPeriods.invalidate();
+      } catch (error) {
+        console.error('Failed to invalidate queries:', error);
+      }
+    },
+    onError: (error: any) => {
+      toast.error(`駐車場更新に失敗しました: ${error.message}`);
     },
   });
 
@@ -392,6 +442,10 @@ export default function OperatorDashboard() {
                           onClick={() => {
                             setSelectedLotId(lot.id);
                             setEditLotData(lot);
+                            // 時間帯設定の初期化（データ取得後にuseEffectで更新される）
+                            setEditTimePeriodEnabled(false);
+                            setEditDayEnabled(true);
+                            setEditNightEnabled(true);
                             setShowEditLotDialog(true);
                           }}
                         >
@@ -478,67 +532,193 @@ export default function OperatorDashboard() {
           <DialogHeader>
             <DialogTitle>駐車場詳細編集</DialogTitle>
             <DialogDescription>
-              {editLotData?.name}
+              駐車場の設定を編集します
             </DialogDescription>
           </DialogHeader>
           {editLotData && (
             <div className="space-y-6">
+              {/* 基本情報 */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>駐車場名</Label>
-                  <p className="text-sm font-medium mt-1">{editLotData.name}</p>
+                  <Label htmlFor="edit-lot-name">駐車場名</Label>
+                  <Input
+                    id="edit-lot-name"
+                    value={editLotData.name}
+                    onChange={(e) => setEditLotData({ ...editLotData, name: e.target.value })}
+                  />
                 </div>
                 <div>
-                  <Label>住所</Label>
-                  <p className="text-sm font-medium mt-1">{editLotData.address || '-'}</p>
+                  <Label htmlFor="edit-lot-address">住所</Label>
+                  <Input
+                    id="edit-lot-address"
+                    value={editLotData.address || ''}
+                    onChange={(e) => setEditLotData({ ...editLotData, address: e.target.value })}
+                  />
                 </div>
                 <div>
-                  <Label>駐車台数</Label>
-                  <p className="text-sm font-medium mt-1">{editLotData.totalSpaces}台</p>
+                  <Label htmlFor="edit-lot-spaces">駐車台数</Label>
+                  <Input
+                    id="edit-lot-spaces"
+                    type="number"
+                    value={editLotData.totalSpaces}
+                    onChange={(e) => setEditLotData({ ...editLotData, totalSpaces: parseInt(e.target.value) || 1 })}
+                  />
                 </div>
                 <div>
                   <Label>ステータス</Label>
-                  <p className="text-sm font-medium mt-1">{editLotData.status === 'active' ? '有効' : '無効'}</p>
+                  <p className="text-sm font-medium mt-2">{editLotData.status === 'active' ? '有効' : '無効'}</p>
                 </div>
               </div>
+
+              {/* 料金設定 */}
               <div className="border-t pt-4">
                 <h4 className="font-semibold mb-3">料金設定</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>計算単位</Label>
-                    <p className="text-sm font-medium mt-1">{editLotData.pricingUnitMinutes}分</p>
+                    <Label htmlFor="edit-pricing-unit">計算単位（分）</Label>
+                    <Input
+                      id="edit-pricing-unit"
+                      type="number"
+                      value={editLotData.pricingUnitMinutes || 60}
+                      onChange={(e) => setEditLotData({ ...editLotData, pricingUnitMinutes: parseInt(e.target.value) || 60 })}
+                    />
                   </div>
                   <div>
-                    <Label>料金</Label>
-                    <p className="text-sm font-medium mt-1">\u00a5{editLotData.pricingAmount}</p>
+                    <Label htmlFor="edit-pricing-amount">料金（円）</Label>
+                    <Input
+                      id="edit-pricing-amount"
+                      type="number"
+                      value={editLotData.pricingAmount || 300}
+                      onChange={(e) => setEditLotData({ ...editLotData, pricingAmount: parseInt(e.target.value) || 300 })}
+                    />
                   </div>
                 </div>
               </div>
-              {editLotData.maxDailyAmountEnabled && (
-                <div className="border-t pt-4">
-                  <h4 className="font-semibold mb-3">1日の最大駐車料金</h4>
-                  <p className="text-sm font-medium">\u00a5{editLotData.maxDailyAmount}</p>
+
+              {/* 1日の最大駐車料金 */}
+              <div className="border-t pt-4">
+                <div className="flex items-center space-x-2 mb-3">
+                  <Checkbox
+                    id="edit-max-daily-enabled"
+                    checked={editLotData.maxDailyAmountEnabled}
+                    onCheckedChange={(checked) => setEditLotData({ ...editLotData, maxDailyAmountEnabled: !!checked })}
+                  />
+                  <Label htmlFor="edit-max-daily-enabled">1日の最大駐車料金を設定する</Label>
                 </div>
-              )}
+                {editLotData.maxDailyAmountEnabled && (
+                  <div>
+                    <Label htmlFor="edit-max-daily-amount">1日の最大駐車料金（円）</Label>
+                    <Input
+                      id="edit-max-daily-amount"
+                      type="number"
+                      value={editLotData.maxDailyAmount || 3000}
+                      onChange={(e) => setEditLotData({ ...editLotData, maxDailyAmount: parseInt(e.target.value) || 3000 })}
+                    />
+                  </div>
+                )}
+              </div>
+
               {/* 時間帯ごとの最大料金設定 */}
-              {editLotData.timePeriodEnabled && (
-                <div className="border-t pt-4">
-                  <h4 className="font-semibold mb-3">時間帯ごとの最大料金設定</h4>
-                  {editLotTimePeriods && editLotTimePeriods.length > 0 ? (
-                    <div className="space-y-3">
-                      {editLotTimePeriods.map((period: any, index: number) => (
-                        <div key={period.id || index} className="bg-muted/50 p-3 rounded-lg">
-                          <p className="text-sm font-medium">
-                            {period.startHour}時～{period.endHour}時: ¥{period.maxAmount?.toLocaleString()}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">時間帯設定なし</p>
-                  )}
+              <div className="border-t pt-4">
+                <div className="flex items-center space-x-2 mb-3">
+                  <Checkbox
+                    id="edit-time-period-enabled"
+                    checked={editTimePeriodEnabled}
+                    onCheckedChange={(checked) => setEditTimePeriodEnabled(!!checked)}
+                  />
+                  <Label htmlFor="edit-time-period-enabled">時間帯ごとの最大料金を設定する（昼/夜）</Label>
                 </div>
-              )}
+                {editTimePeriodEnabled && (
+                  <div className="space-y-4 pl-6">
+                    {/* 昼間設定 */}
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="edit-day-enabled"
+                          checked={editDayEnabled}
+                          onCheckedChange={(checked) => setEditDayEnabled(!!checked)}
+                        />
+                        <Label htmlFor="edit-day-enabled">昼間の最大料金を設定する</Label>
+                      </div>
+                      {editDayEnabled && (
+                        <div className="grid grid-cols-3 gap-2 pl-6">
+                          <div>
+                            <Label>開始時間</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="23"
+                              value={editDayStartHour}
+                              onChange={(e) => setEditDayStartHour(parseInt(e.target.value) || 0)}
+                            />
+                          </div>
+                          <div>
+                            <Label>終了時間</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="23"
+                              value={editDayEndHour}
+                              onChange={(e) => setEditDayEndHour(parseInt(e.target.value) || 0)}
+                            />
+                          </div>
+                          <div>
+                            <Label>最大料金</Label>
+                            <Input
+                              type="number"
+                              value={editDayMaxAmount}
+                              onChange={(e) => setEditDayMaxAmount(parseInt(e.target.value) || 0)}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {/* 夜間設定 */}
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="edit-night-enabled"
+                          checked={editNightEnabled}
+                          onCheckedChange={(checked) => setEditNightEnabled(!!checked)}
+                        />
+                        <Label htmlFor="edit-night-enabled">夜間の最大料金を設定する</Label>
+                      </div>
+                      {editNightEnabled && (
+                        <div className="grid grid-cols-3 gap-2 pl-6">
+                          <div>
+                            <Label>開始時間</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="23"
+                              value={editNightStartHour}
+                              onChange={(e) => setEditNightStartHour(parseInt(e.target.value) || 0)}
+                            />
+                          </div>
+                          <div>
+                            <Label>終了時間</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="23"
+                              value={editNightEndHour}
+                              onChange={(e) => setEditNightEndHour(parseInt(e.target.value) || 0)}
+                            />
+                          </div>
+                          <div>
+                            <Label>最大料金</Label>
+                            <Input
+                              type="number"
+                              value={editNightMaxAmount}
+                              onChange={(e) => setEditNightMaxAmount(parseInt(e.target.value) || 0)}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
           <div className="flex gap-2 justify-end">
@@ -546,7 +726,36 @@ export default function OperatorDashboard() {
               variant="outline"
               onClick={() => setShowEditLotDialog(false)}
             >
-              閉じる
+              キャンセル
+            </Button>
+            <Button
+              onClick={() => {
+                if (!editLotData) return;
+                const timePeriods: { startHour: number; endHour: number; maxAmount: number }[] = [];
+                if (editTimePeriodEnabled) {
+                  if (editDayEnabled) {
+                    timePeriods.push({ startHour: editDayStartHour, endHour: editDayEndHour, maxAmount: editDayMaxAmount });
+                  }
+                  if (editNightEnabled) {
+                    timePeriods.push({ startHour: editNightStartHour, endHour: editNightEndHour, maxAmount: editNightMaxAmount });
+                  }
+                }
+                updateParkingLotMutation.mutate({
+                  lotId: editLotData.id,
+                  name: editLotData.name,
+                  address: editLotData.address || undefined,
+                  totalSpaces: editLotData.totalSpaces,
+                  pricingUnitMinutes: editLotData.pricingUnitMinutes,
+                  pricingAmount: editLotData.pricingAmount,
+                  maxDailyAmount: editLotData.maxDailyAmountEnabled ? editLotData.maxDailyAmount : null,
+                  maxDailyAmountEnabled: editLotData.maxDailyAmountEnabled,
+                  timePeriodEnabled: editTimePeriodEnabled,
+                  timePeriods: editTimePeriodEnabled ? timePeriods : [],
+                });
+              }}
+              disabled={updateParkingLotMutation.isPending}
+            >
+              {updateParkingLotMutation.isPending ? '更新中...' : '更新'}
             </Button>
           </div>
         </DialogContent>

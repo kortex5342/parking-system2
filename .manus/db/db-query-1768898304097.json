@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `max_pricing_periods` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `parkingLotId` int NOT NULL,\n  `startHour` int NOT NULL,\n  `endHour` int NOT NULL,\n  `maxAmount` int NOT NULL,\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `max_pricing_periods_id` PRIMARY KEY(`id`),\n  CONSTRAINT `max_pricing_periods_parkingLotId_parking_lots_id_fk` FOREIGN KEY (`parkingLotId`) REFERENCES `parking_lots`(`id`) ON DELETE cascade ON UPDATE no action\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 8EBibrbXjhAM6dQ.6d02bcfef11f --database hSBncNyCDqpD2yXpmwmJaw --execute CREATE TABLE IF NOT EXISTS `max_pricing_periods` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `parkingLotId` int NOT NULL,\n  `startHour` int NOT NULL,\n  `endHour` int NOT NULL,\n  `maxAmount` int NOT NULL,\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `max_pricing_periods_id` PRIMARY KEY(`id`),\n  CONSTRAINT `max_pricing_periods_parkingLotId_parking_lots_id_fk` FOREIGN KEY (`parkingLotId`) REFERENCES `parking_lots`(`id`) ON DELETE cascade ON UPDATE no action\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1756
+}

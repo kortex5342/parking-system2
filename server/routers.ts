@@ -79,6 +79,7 @@ import {
   updateMaxPricingPeriod,
   deleteMaxPricingPeriod,
   deleteAllMaxPricingPeriodsForLot,
+  deleteMaxPricingPeriodsByLot,
   calculateParkingFeeWithTimePeriods,
 } from "./db";
 import {
@@ -1309,11 +1310,37 @@ export const appRouter = router({
         totalSpaces: z.number().optional(),
         pricingUnitMinutes: z.number().optional(),
         pricingAmount: z.number().optional(),
-        maxDailyAmount: z.number().optional(),
+        maxDailyAmount: z.number().nullable().optional(),
+        maxDailyAmountEnabled: z.boolean().optional(),
+        timePeriodEnabled: z.boolean().optional(),
+        timePeriods: z.array(z.object({
+          startHour: z.number().min(0).max(23),
+          endHour: z.number().min(0).max(23),
+          maxAmount: z.number().min(0),
+        })).optional(),
       }))
       .mutation(async ({ input }) => {
-        const { lotId, ...updateData } = input;
-        await updateParkingLot(lotId, updateData);
+        const { lotId, timePeriods, maxDailyAmount, ...updateData } = input;
+        await updateParkingLot(lotId, {
+          ...updateData,
+          maxDailyAmount: maxDailyAmount ?? undefined,
+        });
+        
+        // 時間帯ごとの最大料金を更新（指定された場合）
+        if (timePeriods !== undefined) {
+          // 既存の時間帯設定を削除
+          await deleteMaxPricingPeriodsByLot(lotId);
+          // 新しい時間帯設定を保存
+          for (const period of timePeriods) {
+            await saveMaxPricingPeriod({
+              parkingLotId: lotId,
+              startHour: period.startHour,
+              endHour: period.endHour,
+              maxAmount: period.maxAmount,
+            });
+          }
+        }
+        
         return { success: true };
       }),
 

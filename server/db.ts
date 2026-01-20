@@ -1530,3 +1530,11 @@ export async function calculateParkingFeeWithTimePeriods(
 
   return { durationMinutes, amount: totalAmount };
 }
+
+// 駐車場の時間帯ごとの最大料金を全て削除
+export async function deleteMaxPricingPeriodsByLot(parkingLotId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.delete(maxPricingPeriods).where(eq(maxPricingPeriods.parkingLotId, parkingLotId));
+}
