@@ -21,9 +21,17 @@ export default function OperatorDashboard() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAddOwnerDialog, setShowAddOwnerDialog] = useState(false);
   const [showEditLotDialog, setShowEditLotDialog] = useState(false);
+  const [showAddParkingLotDialog, setShowAddParkingLotDialog] = useState(false);
   const [newOwnerName, setNewOwnerName] = useState('');
   const [newOwnerEmail, setNewOwnerEmail] = useState('');
   const [editLotData, setEditLotData] = useState<any>(null);
+  // 駐車場追加用のステート
+  const [newLotName, setNewLotName] = useState('');
+  const [newLotAddress, setNewLotAddress] = useState('');
+  const [newLotTotalSpaces, setNewLotTotalSpaces] = useState(10);
+  const [newLotPricingUnit, setNewLotPricingUnit] = useState(60);
+  const [newLotPricingAmount, setNewLotPricingAmount] = useState(300);
+  const [newLotMaxDailyAmount, setNewLotMaxDailyAmount] = useState(3000);
 
   const { data: owners, isLoading: ownersLoading } = trpc.operator.getAllOwners.useQuery();
   const { data: parkingLots, isLoading: lotsLoading } = trpc.operator.getAllParkingLots.useQuery();
@@ -73,6 +81,30 @@ export default function OperatorDashboard() {
     },
   });
 
+  const createParkingLotMutation = (trpc.admin as any).createParkingLot.useMutation({
+    onSuccess: () => {
+      toast.success('駐車場を追加しました');
+      setShowAddParkingLotDialog(false);
+      setNewLotName('');
+      setNewLotAddress('');
+      setNewLotTotalSpaces(10);
+      setNewLotPricingUnit(60);
+      setNewLotPricingAmount(300);
+      setNewLotMaxDailyAmount(3000);
+      // Invalidate queries to refresh data
+      try {
+        const utils = trpc.useUtils();
+        utils.operator.getAllParkingLots.invalidate();
+        utils.operator.getOwnerDetail.invalidate();
+      } catch (error) {
+        console.error('Failed to invalidate queries:', error);
+      }
+    },
+    onError: (error: any) => {
+      toast.error(`駐車場追加に失敗しました: ${error.message}`);
+    },
+  });
+
   const handleDeleteParkingLot = () => {
     if (selectedLotId) {
       deleteMutation.mutate({ lotId: selectedLotId });
@@ -90,6 +122,27 @@ export default function OperatorDashboard() {
       name: newOwnerName,
       email: newOwnerEmail,
       customUrl: customUrl,
+    });
+  };
+
+  const handleAddParkingLot = () => {
+    if (!selectedOwnerId) {
+      toast.error('オーナーを選択してください');
+      return;
+    }
+    if (!newLotName) {
+      toast.error('駐車場名を入力してください');
+      return;
+    }
+    createParkingLotMutation.mutate({
+      ownerId: selectedOwnerId,
+      name: newLotName,
+      address: newLotAddress || null,
+      totalSpaces: newLotTotalSpaces,
+      pricingUnitMinutes: newLotPricingUnit,
+      pricingAmount: newLotPricingAmount,
+      maxDailyAmount: newLotMaxDailyAmount,
+      maxDailyAmountEnabled: true,
     });
   };
 
@@ -185,12 +238,26 @@ export default function OperatorDashboard() {
               )}
               <Card>
                 <CardHeader>
-                  <CardTitle>駐車場一覧</CardTitle>
-                  <CardDescription>
-                    {selectedOwnerId
-                      ? `${selectedOwnerDetail?.parkingLots.length || 0}件`
-                      : `${parkingLots?.length || 0}件`}
-                  </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>駐車場一覧</CardTitle>
+                      <CardDescription>
+                        {selectedOwnerId
+                          ? `${selectedOwnerDetail?.parkingLots.length || 0}件`
+                          : `${parkingLots?.length || 0}件`}
+                      </CardDescription>
+                    </div>
+                    {selectedOwnerId && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowAddParkingLotDialog(true)}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        駐車場を追加
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -417,6 +484,94 @@ export default function OperatorDashboard() {
               disabled={createOwnerMutation.isPending}
             >
               {createOwnerMutation.isPending ? '追加中...' : '追加'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 駐車場追加ダイアログ */}
+      <Dialog open={showAddParkingLotDialog} onOpenChange={setShowAddParkingLotDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>駐車場を追加</DialogTitle>
+            <DialogDescription>
+              {selectedOwnerDetail?.user.name}に新しい駐車場を追加します
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="lot-name">駐車場名 *</Label>
+              <Input
+                id="lot-name"
+                value={newLotName}
+                onChange={(e) => setNewLotName(e.target.value)}
+                placeholder="駐車場名を入力"
+              />
+            </div>
+            <div>
+              <Label htmlFor="lot-address">住所</Label>
+              <Input
+                id="lot-address"
+                value={newLotAddress}
+                onChange={(e) => setNewLotAddress(e.target.value)}
+                placeholder="住所を入力"
+              />
+            </div>
+            <div>
+              <Label htmlFor="lot-spaces">駐車台数</Label>
+              <Input
+                id="lot-spaces"
+                type="number"
+                min={1}
+                value={newLotTotalSpaces}
+                onChange={(e) => setNewLotTotalSpaces(parseInt(e.target.value) || 1)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="lot-pricing-unit">計算単位（分）</Label>
+                <Input
+                  id="lot-pricing-unit"
+                  type="number"
+                  min={1}
+                  value={newLotPricingUnit}
+                  onChange={(e) => setNewLotPricingUnit(parseInt(e.target.value) || 60)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="lot-pricing-amount">料金（円）</Label>
+                <Input
+                  id="lot-pricing-amount"
+                  type="number"
+                  min={0}
+                  value={newLotPricingAmount}
+                  onChange={(e) => setNewLotPricingAmount(parseInt(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="lot-max-daily">1日の最大駐車料金（円）</Label>
+              <Input
+                id="lot-max-daily"
+                type="number"
+                min={0}
+                value={newLotMaxDailyAmount}
+                onChange={(e) => setNewLotMaxDailyAmount(parseInt(e.target.value) || 0)}
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setShowAddParkingLotDialog(false)}
+            >
+              キャンセル
+            </Button>
+            <Button
+              onClick={handleAddParkingLot}
+              disabled={createParkingLotMutation.isPending}
+            >
+              {createParkingLotMutation.isPending ? '追加中...' : '追加'}
             </Button>
           </div>
         </DialogContent>

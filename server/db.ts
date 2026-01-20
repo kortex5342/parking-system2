@@ -1,4 +1,4 @@
-import { eq, desc, and, gte } from "drizzle-orm";
+import { eq, desc, and, gte, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, parkingSpaces, parkingRecords, paymentRecords, paymentMethods, payoutSchedules, InsertParkingSpace, InsertParkingRecord, InsertPaymentRecord, InsertPaymentMethod, InsertPayoutSchedule } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -1049,6 +1049,46 @@ export async function getOwnerMonthlySalesData(ownerId: number) {
     result.push(monthlyData[month] || { month: monthLabel, amount: 0, count: 0 });
   }
 
+  return result;
+}
+
+// 特定の年月の売上を取得
+export async function getOwnerMonthlySalesByYearMonth(ownerId: number, year: number, month: number) {
+  const db = await getDb();
+  if (!db) return { totalAmount: 0, totalTransactions: 0, year, month };
+
+  // 指定された年月の開始日と終了日を計算
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+
+  const records = await db.select().from(paymentRecords)
+    .where(and(
+      eq(paymentRecords.ownerId, ownerId),
+      eq(paymentRecords.paymentStatus, 'completed'),
+      gte(paymentRecords.createdAt, startDate),
+      lte(paymentRecords.createdAt, endDate)
+    ));
+
+  const totalAmount = records.reduce((sum, r) => sum + r.amount, 0);
+  const totalTransactions = records.length;
+
+  return { totalAmount, totalTransactions, year, month };
+}
+
+// 選択可能な年月のリストを取得（過去24ヶ月）
+export function getAvailableYearMonths() {
+  const result = [];
+  const now = new Date();
+  
+  for (let i = 0; i < 24; i++) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    result.push({
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      label: `${date.getFullYear()}年${date.getMonth() + 1}月`
+    });
+  }
+  
   return result;
 }
 

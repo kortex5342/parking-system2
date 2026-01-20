@@ -86,10 +86,19 @@ export default function OwnerDashboard() {
 
 // 概要タブ
 function OverviewTab() {
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  
   const { data: salesSummary, isLoading: summaryLoading } = trpc.owner.getSalesSummary.useQuery();
   const { data: dailyData, isLoading: dailyLoading } = trpc.owner.getDailySalesData.useQuery();
   const { data: monthlyData, isLoading: monthlyLoading } = trpc.owner.getMonthlySalesData.useQuery();
   const { data: bankInfo } = trpc.owner.getBankInfo.useQuery();
+  const { data: availableYearMonths } = trpc.owner.getAvailableYearMonths.useQuery();
+  const { data: selectedMonthSales, isLoading: selectedMonthLoading } = trpc.owner.getMonthlySalesByYearMonth.useQuery(
+    { year: selectedYear, month: selectedMonth },
+    { enabled: !!selectedYear && !!selectedMonth }
+  );
 
   if (summaryLoading || dailyLoading || monthlyLoading) {
     return (
@@ -112,6 +121,68 @@ function OverviewTab() {
           <p className="text-xs text-muted-foreground">
             {salesSummary?.totalTransactions || 0}件の取引
           </p>
+        </CardContent>
+      </Card>
+
+      {/* 月別売上選択 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>月別売上</CardTitle>
+          <CardDescription>年月を選択して売上を確認</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row gap-4 mb-4">
+            <div className="flex-1">
+              <Label htmlFor="year-select">年</Label>
+              <select
+                id="year-select"
+                className="w-full mt-1 p-2 border rounded-md bg-background"
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              >
+                {(() => {
+                  const years: number[] = availableYearMonths?.map((ym: { year: number; month: number; label: string }) => ym.year) || [];
+                  const uniqueYears: number[] = Array.from(new Set(years));
+                  return uniqueYears.map((year: number) => (
+                    <option key={year} value={year}>{year}年</option>
+                  ));
+                })()}
+              </select>
+            </div>
+            <div className="flex-1">
+              <Label htmlFor="month-select">月</Label>
+              <select
+                id="month-select"
+                className="w-full mt-1 p-2 border rounded-md bg-background"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(month => (
+                  <option key={month} value={month}>{month}月</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          
+          {selectedMonthLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="bg-muted/50 rounded-lg p-6">
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground mb-2">
+                  {selectedYear}年{selectedMonth}月の売上
+                </p>
+                <div className="text-4xl font-bold text-primary">
+                  ¥{(selectedMonthSales?.totalAmount || 0).toLocaleString()}
+                </div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  {selectedMonthSales?.totalTransactions || 0}件の取引
+                </p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -62,6 +62,8 @@ import {
   updateUserStatus,
   getOwnerDailySalesData,
   getOwnerMonthlySalesData,
+  getOwnerMonthlySalesByYearMonth,
+  getAvailableYearMonths,
   getBankInfo,
   updateBankInfo,
   getPaymentMethodsByLot,
@@ -1047,6 +1049,21 @@ export const appRouter = router({
     // 月ごとの売上データ
     getMonthlySalesData: ownerProcedure.query(async ({ ctx }) => {
       return await getOwnerMonthlySalesData(ctx.user.id);
+    }),
+
+    // 特定の年月の売上データ
+    getMonthlySalesByYearMonth: ownerProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number().min(1).max(12),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await getOwnerMonthlySalesByYearMonth(ctx.user.id, input.year, input.month);
+      }),
+
+    // 選択可能な年月のリスト
+    getAvailableYearMonths: ownerProcedure.query(async () => {
+      return getAvailableYearMonths();
     }),
 
     // 銀行情報取得
