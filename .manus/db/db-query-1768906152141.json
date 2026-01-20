@@ -1,0 +1,13 @@
+{
+  "query": "SELECT qrCode FROM parking_spaces LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 8EBibrbXjhAM6dQ.6d02bcfef11f --database hSBncNyCDqpD2yXpmwmJaw --execute SELECT qrCode FROM parking_spaces LIMIT 1;",
+  "rows": [
+    {
+      "qrCode": "LOT150001-PARK-01-vvmAqZIV"
+    }
+  ],
+  "messages": [],
+  "stdout": "qrCode\nLOT150001-PARK-01-vvmAqZIV\n",
+  "stderr": "",
+  "execution_time_ms": 1534
+}

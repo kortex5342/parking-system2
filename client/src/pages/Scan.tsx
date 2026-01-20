@@ -117,12 +117,16 @@ export default function Scan() {
       {/* ヘッダー */}
       <header className="relative z-10 container py-6">
         <nav className="flex items-center justify-between">
-          <Link href="/">
-            <button className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
-              <ArrowLeft className="w-5 h-5" />
-              <span>戻る</span>
-            </button>
-          </Link>
+          {view !== "payment-success" ? (
+            <Link href="/">
+              <button className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+                <ArrowLeft className="w-5 h-5" />
+                <span>戻る</span>
+              </button>
+            </Link>
+          ) : (
+            <div />
+          )}
           <div className="flex items-center gap-2">
             <Car className="w-6 h-6 text-foreground" />
             <span className="font-bold">ParkEase</span>
@@ -434,17 +438,14 @@ function EntrySuccessView({
               </div>
             </>
           )}
-          <p className="text-sm text-muted-foreground mb-6">
-            出庫時は再度QRコードをスキャンしてください
-          </p>
-          <div className="space-y-3">
-            <Button onClick={onExit} variant="outline" className="w-full">
-              今すぐ出庫する
-            </Button>
-            <Button onClick={onHome} className="w-full">
-              ホームへ戻る
-            </Button>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <p className="text-sm font-medium text-blue-800">
+              出庫時は再度QRコードをスキャンしてください
+            </p>
           </div>
+          <Button onClick={onExit} variant="outline" className="w-full">
+            今すぐ出庫する
+          </Button>
         </CardContent>
       </Card>
     </div>
@@ -824,16 +825,15 @@ function PaymentSuccessView({ onHome }: { onHome: () => void }) {
       <Card className="border-[var(--success)] bg-[var(--success)]/10">
         <CardContent className="pt-6 text-center">
           <CheckCircle2 className="w-20 h-20 mx-auto mb-4" style={{ color: 'var(--success)' }} />
-          <h2 className="text-3xl font-bold mb-2">決済完了</h2>
-          <p className="text-muted-foreground mb-6">
+          <h2 className="text-3xl font-bold mb-2">決済が完了しました</h2>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-6">
+            <p className="text-lg font-semibold text-amber-800">
+              5分以内に出庫してください
+            </p>
+          </div>
+          <p className="text-sm text-muted-foreground mt-6">
             ご利用ありがとうございました
           </p>
-          <p className="text-sm text-muted-foreground mb-8">
-            お気をつけてお帰りください
-          </p>
-          <Button onClick={onHome} className="w-full" size="lg">
-            ホームへ戻る
-          </Button>
         </CardContent>
       </Card>
     </div>
