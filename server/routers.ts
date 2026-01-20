@@ -1044,6 +1044,16 @@ export const appRouter = router({
         return null;
       }
       const lot = parkingLots[0];
+      
+      // Get time period settings
+      let timePeriods: any = [];
+      try {
+        timePeriods = await getMaxPricingPeriodsByLot(lot.id);
+      } catch (error) {
+        console.error('Error fetching max pricing periods:', error);
+        timePeriods = [];
+      }
+      
       return {
         id: lot.id,
         name: lot.name,
@@ -1052,6 +1062,7 @@ export const appRouter = router({
         pricingAmount: lot.pricingAmount,
         maxDailyAmount: lot.maxDailyAmount,
         maxDailyAmountEnabled: lot.maxDailyAmountEnabled,
+        timePeriods: timePeriods || [],
       };
     }),
   }),

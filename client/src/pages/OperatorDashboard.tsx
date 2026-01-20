@@ -40,8 +40,12 @@ export default function OperatorDashboard() {
       setShowDeleteConfirm(false);
       setSelectedLotId(null);
       // Invalidate queries to refresh data
-      const utils = trpc.useUtils();
-      utils.operator.getAllParkingLots.invalidate();
+      try {
+        const utils = trpc.useUtils();
+        utils.operator.getAllParkingLots.invalidate();
+      } catch (error) {
+        console.error('Failed to invalidate queries:', error);
+      }
     },
     onError: (error: any) => {
       toast.error(`削除に失敗しました: ${error.message}`);
@@ -55,8 +59,12 @@ export default function OperatorDashboard() {
       setNewOwnerName('');
       setNewOwnerEmail('');
       // Invalidate queries to refresh data
-      const utils = trpc.useUtils();
-      utils.operator.getAllOwners.invalidate();
+      try {
+        const utils = trpc.useUtils();
+        utils.operator.getAllOwners.invalidate();
+      } catch (error) {
+        console.error('Failed to invalidate queries:', error);
+      }
     },
     onError: (error: any) => {
       toast.error(`オーナー追加に失敗しました: ${error.message}`);
