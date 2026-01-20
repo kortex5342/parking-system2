@@ -763,7 +763,8 @@ export default function OperatorDashboard() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    // 全QRコードを一括ダウンロード
+                    // 全QRコードを一括ダウンロード（高解像度）
+                    const downloadScale = 8; // 8倍の解像度でダウンロード（480x480ピクセル）
                     selectedLot.spaces.forEach((space, index) => {
                       setTimeout(() => {
                         const svg = document.getElementById(`qr-${space.id}`);
@@ -773,8 +774,10 @@ export default function OperatorDashboard() {
                           const ctx = canvas.getContext('2d');
                           const img = new Image();
                           img.onload = () => {
-                            canvas.width = img.width;
-                            canvas.height = img.height;
+                            // 高解像度でキャンバスに描画
+                            canvas.width = img.width * downloadScale;
+                            canvas.height = img.height * downloadScale;
+                            ctx?.scale(downloadScale, downloadScale);
                             ctx?.drawImage(img, 0, 0);
                             const pngFile = canvas.toDataURL('image/png');
                             const downloadLink = document.createElement('a');
@@ -786,7 +789,7 @@ export default function OperatorDashboard() {
                         }
                       }, index * 200);
                     });
-                    toast.success('QRコードのダウンロードを開始しました');
+                    toast.success('QRコードのダウンロードを開始しました（高解像度）');
                   }}
                 >
                   <Download className="h-4 w-4 mr-1" />
@@ -818,6 +821,7 @@ export default function OperatorDashboard() {
                         size="sm"
                         className="h-6 px-2 text-xs"
                         onClick={() => {
+                          const downloadScale = 8; // 8倍の解像度でダウンロード（480x480ピクセル）
                           const svg = document.getElementById(`qr-${space.id}`);
                           if (svg) {
                             const svgData = new XMLSerializer().serializeToString(svg);
@@ -825,8 +829,10 @@ export default function OperatorDashboard() {
                             const ctx = canvas.getContext('2d');
                             const img = new Image();
                             img.onload = () => {
-                              canvas.width = img.width;
-                              canvas.height = img.height;
+                              // 高解像度でキャンバスに描画
+                              canvas.width = img.width * downloadScale;
+                              canvas.height = img.height * downloadScale;
+                              ctx?.scale(downloadScale, downloadScale);
                               ctx?.drawImage(img, 0, 0);
                               const pngFile = canvas.toDataURL('image/png');
                               const downloadLink = document.createElement('a');
