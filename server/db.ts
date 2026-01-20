@@ -692,13 +692,13 @@ export async function createParkingLot(data: {
   return Number(result[0].insertId);
 }
 
-// オーナーの駐車場一覧取得
+// オーナーの駐車場一覧取得（有効な駐車場のみ）
 export async function getParkingLotsByOwner(ownerId: number) {
   const db = await getDb();
   if (!db) return [];
 
   return await db.select().from(parkingLots)
-    .where(eq(parkingLots.ownerId, ownerId))
+    .where(and(eq(parkingLots.ownerId, ownerId), eq(parkingLots.status, 'active')))
     .orderBy(desc(parkingLots.createdAt));
 }
 
@@ -731,12 +731,16 @@ export async function updateParkingLot(lotId: number, data: {
   await db.update(parkingLots).set(data).where(eq(parkingLots.id, lotId));
 }
 
-// 駐車場削除（論理削除）
+// 駐車場削除（物理削除）
 export async function deleteParkingLot(lotId: number) {
   const db = await getDb();
   if (!db) return;
 
-  await db.update(parkingLots).set({ status: 'inactive' }).where(eq(parkingLots.id, lotId));
+  // 関連する駐車スペースも削除
+  await db.delete(parkingSpaces).where(eq(parkingSpaces.parkingLotId, lotId));
+  
+  // 駐車場を削除
+  await db.delete(parkingLots).where(eq(parkingLots.id, lotId));
 }
 
 // 全駐車場一覧取得（運営者用）
