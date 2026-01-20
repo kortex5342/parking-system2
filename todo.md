@@ -375,3 +375,10 @@
 ## 駐車場追加エラー修正（完了）
 - [x] admin.createParkingLotForOwnerプロシージャが見つからないエラーを修正（trpc.operator.createParkingLotForOwnerに変更）
 - [x] テスト・検証
+
+
+## 次のステップ実装（完了）
+- [x] 既存駐車場の編集ダイアログ（ParkingLotDetailDialog）に時間帯ごとの最大料金設定表示を追加
+- [x] TypeScriptエラーの解消（parkingRouterにgetParkingLotsByCustomUrlを追加）
+- [x] 決済画面の複数決済方法対応（デモモードで動作確認済み）
+- [x] テスト・検証

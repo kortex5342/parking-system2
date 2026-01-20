@@ -572,7 +572,7 @@ function ParkingLotSettingsCard() {
   const customUrl = match && params?.customUrl ? (params.customUrl as string) : null;
   
   const { data: parkingLots, isLoading, error } = customUrl 
-    ? trpc.owner.getParkingLotsByCustomUrl.useQuery({ customUrl })
+    ? trpc.parking.getParkingLotsByCustomUrl.useQuery({ customUrl })
     : trpc.owner.getParkingLots.useQuery();
 
   if (error) {

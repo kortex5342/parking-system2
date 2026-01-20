@@ -47,6 +47,16 @@ export default function OperatorDashboard() {
   // 月別売上用のステート
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  // 編集ダイアログ用の時間帯設定ステート
+  const [editTimePeriodEnabled, setEditTimePeriodEnabled] = useState(false);
+  const [editDayEnabled, setEditDayEnabled] = useState(true);
+  const [editDayStartHour, setEditDayStartHour] = useState(5);
+  const [editDayEndHour, setEditDayEndHour] = useState(19);
+  const [editDayMaxAmount, setEditDayMaxAmount] = useState(3000);
+  const [editNightEnabled, setEditNightEnabled] = useState(true);
+  const [editNightStartHour, setEditNightStartHour] = useState(19);
+  const [editNightEndHour, setEditNightEndHour] = useState(5);
+  const [editNightMaxAmount, setEditNightMaxAmount] = useState(1300);
 
   const { data: owners, isLoading: ownersLoading } = trpc.operator.getAllOwners.useQuery();
   const { data: parkingLots, isLoading: lotsLoading } = trpc.operator.getAllParkingLots.useQuery();
@@ -62,6 +72,11 @@ export default function OperatorDashboard() {
   const { data: monthlySales } = trpc.operator.getOwnerMonthlySalesByYearMonth.useQuery(
     { ownerId: selectedOwnerId || 0, year: selectedYear, month: selectedMonth },
     { enabled: !!selectedOwnerId }
+  );
+  // 編集中の駐車場の時間帯設定取得
+  const { data: editLotTimePeriods } = trpc.operator.getMaxPricingPeriods.useQuery(
+    { parkingLotId: editLotData?.id || 0 },
+    { enabled: !!editLotData?.id && showEditLotDialog }
   );
 
   const deleteMutation = trpc.owner.deleteParkingLot.useMutation({
@@ -503,6 +518,25 @@ export default function OperatorDashboard() {
                 <div className="border-t pt-4">
                   <h4 className="font-semibold mb-3">1日の最大駐車料金</h4>
                   <p className="text-sm font-medium">\u00a5{editLotData.maxDailyAmount}</p>
+                </div>
+              )}
+              {/* 時間帯ごとの最大料金設定 */}
+              {editLotData.timePeriodEnabled && (
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold mb-3">時間帯ごとの最大料金設定</h4>
+                  {editLotTimePeriods && editLotTimePeriods.length > 0 ? (
+                    <div className="space-y-3">
+                      {editLotTimePeriods.map((period: any, index: number) => (
+                        <div key={period.id || index} className="bg-muted/50 p-3 rounded-lg">
+                          <p className="text-sm font-medium">
+                            {period.startHour}時～{period.endHour}時: ¥{period.maxAmount?.toLocaleString()}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">時間帯設定なし</p>
+                  )}
                 </div>
               )}
             </div>

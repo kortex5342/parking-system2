@@ -620,10 +620,10 @@ function PaymentView({
 
   const isProcessing = paymentMutation.isPending || stripeCheckoutMutation.isPending || squareCheckoutMutation.isPending || paypayCheckoutMutation.isPending;
 
-  // デモ版: 常にデモ決済のみ表示
-  const hasRealCardPayment = false;
-  const hasRealPayPay = false;
-  const cardProvider = null;
+  // 利用可能な決済方法を取得
+  const hasRealCardPayment = availableMethods?.card !== null && availableMethods?.card !== undefined;
+  const hasRealPayPay = availableMethods?.paypay === true;
+  const cardProvider = availableMethods?.card || null;
 
   if (!data) {
     return (

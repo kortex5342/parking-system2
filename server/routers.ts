@@ -346,6 +346,37 @@ export const appRouter = router({
         };
       }),
 
+    // カスタムURLでオーナーの駐車場一覧取得
+    getParkingLotsByCustomUrl: publicProcedure
+      .input(z.object({ customUrl: z.string() }))
+      .query(async ({ input }) => {
+        const owner = await getOwnerByCustomUrl(input.customUrl);
+        if (!owner) {
+          return [];
+        }
+        
+        const lots = await getParkingLotsByOwner(owner.id);
+        if (!lots) {
+          return [];
+        }
+        
+        const lotsWithPeriods = await Promise.all(lots.map(async (lot: any) => {
+          let periods: any = [];
+          try {
+            periods = await getMaxPricingPeriodsByLot(lot.id);
+          } catch (error) {
+            console.error('Error fetching max pricing periods:', error);
+            periods = [];
+          }
+          return {
+            ...lot,
+            timePeriods: periods || [],
+          } as any;
+        }));
+        
+        return lotsWithPeriods as any;
+      }),
+
     // 出庫処理（デモ決済）
     checkOut: publicProcedure
       .input(z.object({
@@ -820,6 +851,7 @@ export const appRouter = router({
     // デモ版: 常にデモモードを返す
     getAvailableMethods: publicProcedure.query(async () => {
       // デモ版のため、常にデモ決済のみを返す
+      // 実際の決済サービスを有効にする場合は、ここを修正して実際の設定を取得する
       return { card: null, paypay: false };
     }),
   }),
