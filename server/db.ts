@@ -723,6 +723,7 @@ export async function updateParkingLot(lotId: number, data: {
   pricingAmount?: number;
   maxDailyAmount?: number;
   maxDailyAmountEnabled?: boolean;
+  timePeriodEnabled?: boolean;
   status?: 'active' | 'inactive';
 }) {
   const db = await getDb();

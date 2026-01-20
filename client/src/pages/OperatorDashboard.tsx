@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function OperatorDashboard() {
   const [selectedOwnerId, setSelectedOwnerId] = useState<number | null>(null);
@@ -32,6 +33,15 @@ export default function OperatorDashboard() {
   const [newLotPricingUnit, setNewLotPricingUnit] = useState(60);
   const [newLotPricingAmount, setNewLotPricingAmount] = useState(300);
   const [newLotMaxDailyAmount, setNewLotMaxDailyAmount] = useState(3000);
+  const [newLotMaxDailyEnabled, setNewLotMaxDailyEnabled] = useState(true);
+  const [newLotTimePeriodEnabled, setNewLotTimePeriodEnabled] = useState(false);
+  // 時間帯ごとの最大料金設定
+  const [dayStartHour, setDayStartHour] = useState(5);
+  const [dayEndHour, setDayEndHour] = useState(19);
+  const [dayMaxAmount, setDayMaxAmount] = useState(3000);
+  const [nightStartHour, setNightStartHour] = useState(19);
+  const [nightEndHour, setNightEndHour] = useState(5);
+  const [nightMaxAmount, setNightMaxAmount] = useState(1300);
 
   const { data: owners, isLoading: ownersLoading } = trpc.operator.getAllOwners.useQuery();
   const { data: parkingLots, isLoading: lotsLoading } = trpc.operator.getAllParkingLots.useQuery();
@@ -81,7 +91,7 @@ export default function OperatorDashboard() {
     },
   });
 
-  const createParkingLotMutation = (trpc.admin as any).createParkingLot.useMutation({
+  const createParkingLotMutation = (trpc.admin as any).createParkingLotForOwner.useMutation({
     onSuccess: () => {
       toast.success('駐車場を追加しました');
       setShowAddParkingLotDialog(false);
@@ -91,6 +101,14 @@ export default function OperatorDashboard() {
       setNewLotPricingUnit(60);
       setNewLotPricingAmount(300);
       setNewLotMaxDailyAmount(3000);
+      setNewLotMaxDailyEnabled(true);
+      setNewLotTimePeriodEnabled(false);
+      setDayStartHour(5);
+      setDayEndHour(19);
+      setDayMaxAmount(3000);
+      setNightStartHour(19);
+      setNightEndHour(5);
+      setNightMaxAmount(1300);
       // Invalidate queries to refresh data
       try {
         const utils = trpc.useUtils();
@@ -141,8 +159,13 @@ export default function OperatorDashboard() {
       totalSpaces: newLotTotalSpaces,
       pricingUnitMinutes: newLotPricingUnit,
       pricingAmount: newLotPricingAmount,
-      maxDailyAmount: newLotMaxDailyAmount,
-      maxDailyAmountEnabled: true,
+      maxDailyAmount: newLotMaxDailyEnabled ? newLotMaxDailyAmount : null,
+      maxDailyAmountEnabled: newLotMaxDailyEnabled,
+      timePeriodEnabled: newLotTimePeriodEnabled,
+      timePeriods: newLotTimePeriodEnabled ? [
+        { startHour: dayStartHour, endHour: dayEndHour, maxAmount: dayMaxAmount },
+        { startHour: nightStartHour, endHour: nightEndHour, maxAmount: nightMaxAmount },
+      ] : [],
     });
   };
 
@@ -549,15 +572,124 @@ export default function OperatorDashboard() {
                 />
               </div>
             </div>
-            <div>
-              <Label htmlFor="lot-max-daily">1日の最大駐車料金（円）</Label>
-              <Input
-                id="lot-max-daily"
-                type="number"
-                min={0}
-                value={newLotMaxDailyAmount}
-                onChange={(e) => setNewLotMaxDailyAmount(parseInt(e.target.value) || 0)}
-              />
+            {/* 1日の最大駐車料金設定 */}
+            <div className="border-t pt-4">
+              <div className="flex items-center space-x-2 mb-3">
+                <Checkbox
+                  id="max-daily-enabled"
+                  checked={newLotMaxDailyEnabled}
+                  onCheckedChange={(checked) => setNewLotMaxDailyEnabled(checked === true)}
+                />
+                <Label htmlFor="max-daily-enabled" className="font-semibold">
+                  1日の最大駐車料金を設定する
+                </Label>
+              </div>
+              {newLotMaxDailyEnabled && (
+                <div>
+                  <Label htmlFor="lot-max-daily">1日の最大駐車料金（円）</Label>
+                  <Input
+                    id="lot-max-daily"
+                    type="number"
+                    min={0}
+                    value={newLotMaxDailyAmount}
+                    onChange={(e) => setNewLotMaxDailyAmount(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 時間帯ごとの最大料金設定 */}
+            <div className="border-t pt-4">
+              <div className="flex items-center space-x-2 mb-3">
+                <Checkbox
+                  id="time-period-enabled"
+                  checked={newLotTimePeriodEnabled}
+                  onCheckedChange={(checked) => setNewLotTimePeriodEnabled(checked === true)}
+                />
+                <Label htmlFor="time-period-enabled" className="font-semibold">
+                  時間帯ごとの最大料金を設定する（昼/夜）
+                </Label>
+              </div>
+              {newLotTimePeriodEnabled && (
+                <div className="space-y-4">
+                  {/* 昼間設定 */}
+                  <div className="bg-muted/50 p-3 rounded-lg">
+                    <h5 className="font-medium mb-2">昼間の最大料金</h5>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-xs">開始時間</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={23}
+                          value={dayStartHour}
+                          onChange={(e) => setDayStartHour(parseInt(e.target.value) || 0)}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">終了時間</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={23}
+                          value={dayEndHour}
+                          onChange={(e) => setDayEndHour(parseInt(e.target.value) || 0)}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">最大料金（円）</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={dayMaxAmount}
+                          onChange={(e) => setDayMaxAmount(parseInt(e.target.value) || 0)}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      例: {dayStartHour}時～{dayEndHour}時は最大¥{dayMaxAmount.toLocaleString()}
+                    </p>
+                  </div>
+                  {/* 夜間設定 */}
+                  <div className="bg-muted/50 p-3 rounded-lg">
+                    <h5 className="font-medium mb-2">夜間の最大料金</h5>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-xs">開始時間</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={23}
+                          value={nightStartHour}
+                          onChange={(e) => setNightStartHour(parseInt(e.target.value) || 0)}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">終了時間</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={23}
+                          value={nightEndHour}
+                          onChange={(e) => setNightEndHour(parseInt(e.target.value) || 0)}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">最大料金（円）</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={nightMaxAmount}
+                          onChange={(e) => setNightMaxAmount(parseInt(e.target.value) || 0)}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      例: {nightStartHour}時～{nightEndHour}時は最大¥{nightMaxAmount.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex gap-2 justify-end">

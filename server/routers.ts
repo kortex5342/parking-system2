@@ -1272,8 +1272,14 @@ export const appRouter = router({
         totalSpaces: z.number().min(1).max(1000).default(10),
         pricingUnitMinutes: z.number().default(60),
         pricingAmount: z.number().default(300),
-        maxDailyAmount: z.number().default(3000),
+        maxDailyAmount: z.number().nullable().default(3000),
         maxDailyAmountEnabled: z.boolean().default(true),
+        timePeriodEnabled: z.boolean().default(false),
+        timePeriods: z.array(z.object({
+          startHour: z.number().min(0).max(23),
+          endHour: z.number().min(0).max(23),
+          maxAmount: z.number().min(0),
+        })).default([]),
       }))
       .mutation(async ({ input }) => {
         const owner = await getUserById(input.ownerId);
@@ -1292,9 +1298,22 @@ export const appRouter = router({
         await updateParkingLot(lotId, {
           pricingUnitMinutes: input.pricingUnitMinutes,
           pricingAmount: input.pricingAmount,
-          maxDailyAmount: input.maxDailyAmount,
+          maxDailyAmount: input.maxDailyAmount ?? undefined,
           maxDailyAmountEnabled: input.maxDailyAmountEnabled,
+          timePeriodEnabled: input.timePeriodEnabled,
         });
+        
+        // 時間帯ごとの最大料金を保存
+        if (input.timePeriodEnabled && input.timePeriods.length > 0) {
+          for (const period of input.timePeriods) {
+            await saveMaxPricingPeriod({
+              parkingLotId: lotId,
+              startHour: period.startHour,
+              endHour: period.endHour,
+              maxAmount: period.maxAmount,
+            });
+          }
+        }
         
         // 駐車スペースを初期化
         await initializeParkingSpacesForLot(lotId, input.totalSpaces);
