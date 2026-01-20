@@ -101,7 +101,7 @@ export default function OperatorDashboard() {
     },
   });
 
-  const createParkingLotMutation = (trpc.admin as any).createParkingLotForOwner.useMutation({
+  const createParkingLotMutation = trpc.operator.createParkingLotForOwner.useMutation({
     onSuccess: () => {
       toast.success('駐車場を追加しました');
       setShowAddParkingLotDialog(false);
@@ -167,7 +167,7 @@ export default function OperatorDashboard() {
     createParkingLotMutation.mutate({
       ownerId: selectedOwnerId,
       name: newLotName,
-      address: newLotAddress || null,
+      address: newLotAddress || undefined,
       totalSpaces: newLotTotalSpaces,
       pricingUnitMinutes: newLotPricingUnit,
       pricingAmount: newLotPricingAmount,
