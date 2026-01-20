@@ -927,6 +927,37 @@ export const appRouter = router({
       return lotsWithPeriods as any;
     }),
 
+    // カスタムURLでオーナーの駐車場一覧取得
+    getParkingLotsByCustomUrl: publicProcedure
+      .input(z.object({ customUrl: z.string() }))
+      .query(async ({ input }) => {
+        const owner = await getOwnerByCustomUrl(input.customUrl);
+        if (!owner) {
+          return [];
+        }
+        
+        const lots = await getParkingLotsByOwner(owner.id);
+        if (!lots) {
+          return [];
+        }
+        
+        const lotsWithPeriods = await Promise.all(lots.map(async (lot: any) => {
+          let periods: any = [];
+          try {
+            periods = await getMaxPricingPeriodsByLot(lot.id);
+          } catch (error) {
+            console.error('Error fetching max pricing periods:', error);
+            periods = [];
+          }
+          return {
+            ...lot,
+            timePeriods: periods || [],
+          } as any;
+        }));
+        
+        return lotsWithPeriods as any;
+      }),
+
     // 駐車場詳細取得
     getParkingLot: ownerProcedure
       .input(z.object({ lotId: z.number() }))

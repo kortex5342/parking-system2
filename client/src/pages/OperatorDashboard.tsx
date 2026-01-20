@@ -20,8 +20,10 @@ export default function OperatorDashboard() {
   const [selectedLotId, setSelectedLotId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAddOwnerDialog, setShowAddOwnerDialog] = useState(false);
+  const [showEditLotDialog, setShowEditLotDialog] = useState(false);
   const [newOwnerName, setNewOwnerName] = useState('');
   const [newOwnerEmail, setNewOwnerEmail] = useState('');
+  const [editLotData, setEditLotData] = useState<any>(null);
 
   const { data: owners, isLoading: ownersLoading } = trpc.operator.getAllOwners.useQuery();
   const { data: parkingLots, isLoading: lotsLoading } = trpc.operator.getAllParkingLots.useQuery();
@@ -202,7 +204,11 @@ export default function OperatorDashboard() {
                         <Card
                           key={lot.id}
                           className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => setSelectedLotId(lot.id)}
+                          onClick={() => {
+                            setSelectedLotId(lot.id);
+                            setEditLotData(lot);
+                            setShowEditLotDialog(true);
+                          }}
                         >
                           <CardContent className="pt-4">
                             <div className="flex items-start justify-between">
@@ -280,6 +286,67 @@ export default function OperatorDashboard() {
           </div>
         </div>
       </main>
+
+      {/* 駐車場詳細編集ダイアログ */}
+      <Dialog open={showEditLotDialog} onOpenChange={setShowEditLotDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>駐車場詳細編集</DialogTitle>
+            <DialogDescription>
+              {editLotData?.name}
+            </DialogDescription>
+          </DialogHeader>
+          {editLotData && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>駐車場名</Label>
+                  <p className="text-sm font-medium mt-1">{editLotData.name}</p>
+                </div>
+                <div>
+                  <Label>住所</Label>
+                  <p className="text-sm font-medium mt-1">{editLotData.address || '-'}</p>
+                </div>
+                <div>
+                  <Label>駐車台数</Label>
+                  <p className="text-sm font-medium mt-1">{editLotData.totalSpaces}台</p>
+                </div>
+                <div>
+                  <Label>ステータス</Label>
+                  <p className="text-sm font-medium mt-1">{editLotData.status === 'active' ? '有効' : '無効'}</p>
+                </div>
+              </div>
+              <div className="border-t pt-4">
+                <h4 className="font-semibold mb-3">料金設定</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>計算単位</Label>
+                    <p className="text-sm font-medium mt-1">{editLotData.pricingUnitMinutes}分</p>
+                  </div>
+                  <div>
+                    <Label>料金</Label>
+                    <p className="text-sm font-medium mt-1">\u00a5{editLotData.pricingAmount}</p>
+                  </div>
+                </div>
+              </div>
+              {editLotData.maxDailyAmountEnabled && (
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold mb-3">1日の最大駐車料金</h4>
+                  <p className="text-sm font-medium">\u00a5{editLotData.maxDailyAmount}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setShowEditLotDialog(false)}
+            >
+              閉じる
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 削除確認ダイアログ */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>

@@ -22,12 +22,20 @@ import {
   Clock,
   Building2,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useRoute } from "wouter";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function OwnerDashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
+  const [match, params] = useRoute("/owner/:customUrl");
+  
+  // カスタムURL経由でアクセスした場合、そのオーナーのデータを取得
+  const customUrl = match && params?.customUrl ? (params.customUrl as string) : null;
+  const { data: ownerData } = trpc.operator.getOwnerByCustomUrl.useQuery(
+    { customUrl: customUrl || '' },
+    { enabled: !!customUrl }
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -489,7 +497,12 @@ function ProfileTab() {
 
 // 駐車場設定カード（読み取り専用）
 function ParkingLotSettingsCard() {
-  const { data: parkingLots, isLoading, error } = trpc.owner.getParkingLots.useQuery();
+  const [match, params] = useRoute("/owner/:customUrl");
+  const customUrl = match && params?.customUrl ? (params.customUrl as string) : null;
+  
+  const { data: parkingLots, isLoading, error } = customUrl 
+    ? trpc.owner.getParkingLotsByCustomUrl.useQuery({ customUrl })
+    : trpc.owner.getParkingLots.useQuery();
 
   if (error) {
     return (
