@@ -551,7 +551,7 @@ function PaymentView({
   onSuccess: () => void;
   onBack: () => void;
 }) {
-  const [paymentMethod, setPaymentMethod] = useState<"paypay" | "credit_card" | "stripe" | "square" | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<"paypay" | "credit_card" | "stripe" | "square" | "line_pay" | "rakuten_pay" | "apple_pay" | null>(null);
   const { data } = trpc.parking.getCheckoutInfo.useQuery({ sessionToken });
   const { data: availableMethods } = trpc.paymentSettings.getAvailableMethods.useQuery();
   
@@ -777,6 +777,75 @@ function PaymentView({
                 </div>
               </button>
             )}
+
+            {/* LINE Payデモ */}
+            <button
+              onClick={() => setPaymentMethod("line_pay")}
+              className={`w-full p-4 rounded-xl border-2 transition-all ${
+                paymentMethod === "line_pay"
+                  ? "border-[var(--success)] bg-[var(--success)]/10"
+                  : "border-border hover:border-muted-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-[#00C300] rounded-lg flex items-center justify-center">
+                  <Smartphone className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-left flex-1">
+                  <p className="font-bold">LINE Pay</p>
+                  <p className="text-sm text-muted-foreground">デモ決済</p>
+                </div>
+                {paymentMethod === "line_pay" && (
+                  <CheckCircle2 className="w-6 h-6" style={{ color: 'var(--success)' }} />
+                )}
+              </div>
+            </button>
+
+            {/* 楽天ペイデモ */}
+            <button
+              onClick={() => setPaymentMethod("rakuten_pay")}
+              className={`w-full p-4 rounded-xl border-2 transition-all ${
+                paymentMethod === "rakuten_pay"
+                  ? "border-[var(--success)] bg-[var(--success)]/10"
+                  : "border-border hover:border-muted-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-[#BF0000] rounded-lg flex items-center justify-center">
+                  <Smartphone className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-left flex-1">
+                  <p className="font-bold">楽天ペイ</p>
+                  <p className="text-sm text-muted-foreground">デモ決済</p>
+                </div>
+                {paymentMethod === "rakuten_pay" && (
+                  <CheckCircle2 className="w-6 h-6" style={{ color: 'var(--success)' }} />
+                )}
+              </div>
+            </button>
+
+            {/* Apple Payデモ */}
+            <button
+              onClick={() => setPaymentMethod("apple_pay")}
+              className={`w-full p-4 rounded-xl border-2 transition-all ${
+                paymentMethod === "apple_pay"
+                  ? "border-[var(--success)] bg-[var(--success)]/10"
+                  : "border-border hover:border-muted-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-black rounded-lg flex items-center justify-center">
+                  <Smartphone className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-left flex-1">
+                  <p className="font-bold">Apple Pay</p>
+                  <p className="text-sm text-muted-foreground">デモ決済</p>
+                </div>
+                {paymentMethod === "apple_pay" && (
+                  <CheckCircle2 className="w-6 h-6" style={{ color: 'var(--success)' }} />
+                )}
+              </div>
+            </button>
           </>
         )}
       </div>

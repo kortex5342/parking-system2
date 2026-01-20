@@ -1,4 +1,4 @@
-import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sum } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, parkingSpaces, parkingRecords, paymentRecords, paymentMethods, payoutSchedules, InsertParkingSpace, InsertParkingRecord, InsertPaymentRecord, InsertPaymentMethod, InsertPayoutSchedule } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -237,7 +237,7 @@ export async function createPaymentRecord(data: {
   exitTime: number;
   durationMinutes: number;
   amount: number;
-  paymentMethod: "paypay" | "credit_card";
+  paymentMethod: "paypay" | "credit_card" | "line_pay" | "rakuten_pay" | "apple_pay";
 }): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -333,7 +333,7 @@ export async function createPaymentRecordWithStripe(data: {
   exitTime: number;
   durationMinutes: number;
   amount: number;
-  paymentMethod: "paypay" | "credit_card";
+  paymentMethod: "paypay" | "credit_card" | "line_pay" | "rakuten_pay" | "apple_pay";
   stripePaymentIntentId?: string;
   isDemo: boolean;
 }): Promise<number> {
@@ -486,7 +486,7 @@ export async function createPaymentRecordFull(data: {
   exitTime: number;
   durationMinutes: number;
   amount: number;
-  paymentMethod: "paypay" | "credit_card" | "stripe" | "square";
+  paymentMethod: "paypay" | "credit_card" | "stripe" | "square" | "line_pay" | "rakuten_pay" | "apple_pay";
   stripePaymentIntentId?: string;
   squarePaymentId?: string;
   paypayPaymentId?: string;
@@ -839,7 +839,7 @@ export async function createPaymentRecordForOwner(data: {
   exitTime: number;
   durationMinutes: number;
   amount: number;
-  paymentMethod: "paypay" | "credit_card" | "stripe" | "square";
+  paymentMethod: "paypay" | "credit_card" | "stripe" | "square" | "line_pay" | "rakuten_pay" | "apple_pay";
   stripePaymentIntentId?: string;
   squarePaymentId?: string;
   paypayPaymentId?: string;
@@ -1190,14 +1190,43 @@ export async function deletePaymentMethod(id: number) {
 // ========== Payout Schedules ==========
 export async function getPayoutSchedulesByOwner(ownerId: number) {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) return { pendingAmount: 0, lastPayoutDate: null, lastPayoutAmount: 0 };
 
   try {
-    return await db.select().from(payoutSchedules)
-      .where(eq(payoutSchedules.ownerId, ownerId));
+    // 前月の売上を取得（振込予定額）
+    const now = new Date();
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    
+    const lastMonthPayments = await db.select({
+      totalAmount: sum(paymentRecords.amount)
+    }).from(paymentRecords)
+      .where(and(
+        eq(paymentRecords.ownerId, ownerId),
+        eq(paymentRecords.paymentStatus, 'completed'),
+        gte(paymentRecords.exitTime, lastMonth.getTime()),
+        lte(paymentRecords.exitTime, lastMonthEnd.getTime())
+      ));
+    
+    const pendingAmount = Number(lastMonthPayments[0]?.totalAmount) || 0;
+    
+    // 前回の振込実績を取得
+    const lastPayout = await db.select().from(payoutSchedules)
+      .where(and(
+        eq(payoutSchedules.ownerId, ownerId),
+        eq(payoutSchedules.status, 'completed')
+      ))
+      .orderBy(desc(payoutSchedules.payoutDate))
+      .limit(1);
+    
+    return {
+      pendingAmount,
+      lastPayoutDate: lastPayout[0]?.payoutDate || null,
+      lastPayoutAmount: lastPayout[0]?.totalAmount || 0
+    };
   } catch (error) {
     console.error("[Database] Error getting payout schedules:", error);
-    return [];
+    return { pendingAmount: 0, lastPayoutDate: null, lastPayoutAmount: 0 };
   }
 }
 

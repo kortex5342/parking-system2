@@ -95,6 +95,7 @@ function OverviewTab() {
   const { data: dailyData, isLoading: dailyLoading } = trpc.owner.getDailySalesData.useQuery();
   const { data: monthlyData, isLoading: monthlyLoading } = trpc.owner.getMonthlySalesData.useQuery();
   const { data: bankInfo } = trpc.owner.getBankInfo.useQuery();
+  const { data: payoutSchedules, isLoading: payoutLoading } = trpc.owner.getPayoutSchedules.useQuery();
   const { data: availableYearMonths } = trpc.owner.getAvailableYearMonths.useQuery();
   const { data: selectedMonthSales, isLoading: selectedMonthLoading } = trpc.owner.getMonthlySalesByYearMonth.useQuery(
     { year: selectedYear, month: selectedMonth },
@@ -263,6 +264,9 @@ function OverviewTab() {
         </CardContent>
       </Card>
 
+      {/* 振込スケジュール */}
+      <PayoutScheduleCard payoutSchedules={payoutSchedules} isLoading={payoutLoading} />
+
       {/* 振込先設定 */}
       <BankInfoCard bankInfo={bankInfo} />
     </div>
@@ -415,6 +419,84 @@ function BankInfoCard({ bankInfo }: any) {
             </Button>
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// 振込スケジュールカード
+function PayoutScheduleCard({ payoutSchedules, isLoading }: { payoutSchedules: any; isLoading: boolean }) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>振込スケジュール</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // 次回振込予定日を計算（毎月15日と仮定）
+  const getNextPayoutDate = () => {
+    const now = new Date();
+    const currentDay = now.getDate();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    
+    if (currentDay < 15) {
+      return new Date(year, month, 15);
+    } else {
+      return new Date(year, month + 1, 15);
+    }
+  };
+
+  const nextPayoutDate = getNextPayoutDate();
+  const pendingAmount = payoutSchedules?.pendingAmount || 0;
+  const lastPayoutDate = payoutSchedules?.lastPayoutDate;
+  const lastPayoutAmount = payoutSchedules?.lastPayoutAmount || 0;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Clock className="h-5 w-5" />
+          振込スケジュール
+        </CardTitle>
+        <CardDescription>毎月15日に前月分の売上を振込みます</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* 次回振込予定 */}
+        <div className="p-4 bg-primary/10 rounded-lg">
+          <p className="text-sm text-muted-foreground mb-1">次回振込予定日</p>
+          <p className="text-2xl font-bold text-primary">
+            {nextPayoutDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
+          <p className="text-sm text-muted-foreground mt-2">振込予定額</p>
+          <p className="text-xl font-semibold">¥{pendingAmount.toLocaleString()}</p>
+        </div>
+
+        {/* 前回振込実績 */}
+        {lastPayoutDate && (
+          <div className="p-4 bg-muted rounded-lg">
+            <p className="text-sm text-muted-foreground mb-1">前回振込実績</p>
+            <p className="font-medium">
+              {new Date(lastPayoutDate).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
+            </p>
+            <p className="text-lg font-semibold mt-1">¥{lastPayoutAmount.toLocaleString()}</p>
+          </div>
+        )}
+
+        <Separator />
+
+        <div className="text-sm text-muted-foreground">
+          <p>※ 振込は登録された銀行口座に行われます</p>
+          <p>※ 振込手数料は運営者が負担します</p>
+        </div>
       </CardContent>
     </Card>
   );

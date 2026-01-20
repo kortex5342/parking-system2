@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "a0c0d963-0175-49d8-a264-9e4ff01cf716",
-  "prevId": "8c29eca3-f6c8-4459-bf2a-6fd1431c5b65",
+  "id": "f6231ae8-d392-498f-8dea-cb4efcaf32d5",
+  "prevId": "a0c0d963-0175-49d8-a264-9e4ff01cf716",
   "tables": {
     "max_pricing_periods": {
       "name": "max_pricing_periods",
@@ -558,7 +558,7 @@
         },
         "paymentMethod": {
           "name": "paymentMethod",
-          "type": "enum('paypay','credit_card','stripe','square')",
+          "type": "enum('paypay','credit_card','stripe','square','line_pay','rakuten_pay','apple_pay')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -594,6 +594,20 @@
         },
         "paypayPaymentId": {
           "name": "paypayPaymentId",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "linePayTransactionId": {
+          "name": "linePayTransactionId",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rakutenPayOrderId": {
+          "name": "rakutenPayOrderId",
           "type": "varchar(64)",
           "primaryKey": false,
           "notNull": false,

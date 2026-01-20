@@ -390,7 +390,7 @@ export const appRouter = router({
     checkOut: publicProcedure
       .input(z.object({
         sessionToken: z.string(),
-        paymentMethod: z.enum(['paypay', 'credit_card']),
+        paymentMethod: z.enum(['paypay', 'credit_card', 'line_pay', 'rakuten_pay', 'apple_pay']),
       }))
       .mutation(async ({ input }) => {
         const record = await getParkingRecordByToken(input.sessionToken);
@@ -1134,6 +1134,11 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // 振込スケジュール取得
+    getPayoutSchedules: ownerProcedure.query(async ({ ctx }) => {
+      return await getPayoutSchedulesByOwner(ctx.user.id);
+    }),
+
     // 駐車場情報取得（読み取り専用）
     getParkingLotInfo: ownerProcedure.query(async ({ ctx }) => {
       const parkingLots = await getParkingLotsByOwner(ctx.user.id);
@@ -1508,11 +1513,6 @@ export const appRouter = router({
         await deletePaymentMethod(input.id);
         return { success: true };
       }),
-
-    // 振込スケジュール取得（オーナー用）
-    getPayoutSchedules: ownerProcedure.query(async ({ ctx }) => {
-      return await getPayoutSchedulesByOwner(ctx.user.id);
-    }),
 
     // 新規オーナー追加
     createOwner: adminProcedure

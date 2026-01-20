@@ -123,12 +123,14 @@ export const paymentRecords = mysqlTable("payment_records", {
   exitTime: bigint("exitTime", { mode: "number" }).notNull(), // 出庫時刻
   durationMinutes: int("durationMinutes").notNull(), // 駐車時間（分）
   amount: int("amount").notNull(), // 料金（円）
-  paymentMethod: mysqlEnum("paymentMethod", ["paypay", "credit_card", "stripe", "square"]).notNull(),
+  paymentMethod: mysqlEnum("paymentMethod", ["paypay", "credit_card", "stripe", "square", "line_pay", "rakuten_pay", "apple_pay"]).notNull(),
   paymentStatus: mysqlEnum("paymentStatus", ["pending", "completed", "failed"]).default("pending").notNull(),
   transactionId: varchar("transactionId", { length: 64 }), // デモ用トランザクションID
   stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 64 }),
   squarePaymentId: varchar("squarePaymentId", { length: 64 }),
   paypayPaymentId: varchar("paypayPaymentId", { length: 64 }),
+  linePayTransactionId: varchar("linePayTransactionId", { length: 64 }),
+  rakutenPayOrderId: varchar("rakutenPayOrderId", { length: 64 }),
   isDemo: boolean("isDemo").default(true).notNull(), // デモ決済か実決済か
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
