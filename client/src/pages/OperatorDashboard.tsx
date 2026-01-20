@@ -3,7 +3,8 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Trash2, X, Plus } from "lucide-react";
+import { Loader2, Trash2, X, Plus, Download, QrCode } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -718,6 +719,101 @@ export default function OperatorDashboard() {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* QRコード表示セクション */}
+          {editLotData && selectedLot?.spaces && selectedLot.spaces.length > 0 && (
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <QrCode className="h-4 w-4" />
+                  駐車スペースQRコード（{selectedLot.spaces.length}台分）
+                </h4>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // 全QRコードを一括ダウンロード
+                    selectedLot.spaces.forEach((space, index) => {
+                      setTimeout(() => {
+                        const svg = document.getElementById(`qr-${space.id}`);
+                        if (svg) {
+                          const svgData = new XMLSerializer().serializeToString(svg);
+                          const canvas = document.createElement('canvas');
+                          const ctx = canvas.getContext('2d');
+                          const img = new Image();
+                          img.onload = () => {
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            ctx?.drawImage(img, 0, 0);
+                            const pngFile = canvas.toDataURL('image/png');
+                            const downloadLink = document.createElement('a');
+                            downloadLink.download = `${editLotData.name}_スペース${space.spaceNumber}.png`;
+                            downloadLink.href = pngFile;
+                            downloadLink.click();
+                          };
+                          img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+                        }
+                      }, index * 200);
+                    });
+                    toast.success('QRコードのダウンロードを開始しました');
+                  }}
+                >
+                  <Download className="h-4 w-4 mr-1" />
+                  一括ダウンロード
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-h-80 overflow-y-auto">
+                {selectedLot.spaces.map((space) => {
+                  const scanUrl = `${window.location.origin}/scan?qr=${space.qrCode}`;
+                  return (
+                    <div key={space.id} className="border rounded-lg p-3 text-center bg-white">
+                      <div className="mb-2">
+                        <QRCodeSVG
+                          id={`qr-${space.id}`}
+                          value={scanUrl}
+                          size={100}
+                          level="M"
+                          includeMargin={true}
+                        />
+                      </div>
+                      <p className="text-sm font-medium">スペース {space.spaceNumber}</p>
+                      <p className="text-xs text-muted-foreground truncate" title={space.qrCode}>
+                        {space.qrCode.substring(0, 15)}...
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-1"
+                        onClick={() => {
+                          const svg = document.getElementById(`qr-${space.id}`);
+                          if (svg) {
+                            const svgData = new XMLSerializer().serializeToString(svg);
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            const img = new Image();
+                            img.onload = () => {
+                              canvas.width = img.width;
+                              canvas.height = img.height;
+                              ctx?.drawImage(img, 0, 0);
+                              const pngFile = canvas.toDataURL('image/png');
+                              const downloadLink = document.createElement('a');
+                              downloadLink.download = `${editLotData.name}_スペース${space.spaceNumber}.png`;
+                              downloadLink.href = pngFile;
+                              downloadLink.click();
+                            };
+                            img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+                          }
+                        }}
+                      >
+                        <Download className="h-3 w-3 mr-1" />
+                        保存
+                      </Button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
