@@ -42,6 +42,9 @@ export default function OperatorDashboard() {
   const [nightStartHour, setNightStartHour] = useState(19);
   const [nightEndHour, setNightEndHour] = useState(5);
   const [nightMaxAmount, setNightMaxAmount] = useState(1300);
+  // 月別売上用のステート
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
 
   const { data: owners, isLoading: ownersLoading } = trpc.operator.getAllOwners.useQuery();
   const { data: parkingLots, isLoading: lotsLoading } = trpc.operator.getAllParkingLots.useQuery();
@@ -52,6 +55,11 @@ export default function OperatorDashboard() {
   const { data: selectedLot } = trpc.operator.getParkingLot.useQuery(
     { lotId: selectedLotId || 0 },
     { enabled: !!selectedLotId }
+  );
+  // 月別売上取得
+  const { data: monthlySales } = trpc.operator.getOwnerMonthlySalesByYearMonth.useQuery(
+    { ownerId: selectedOwnerId || 0, year: selectedYear, month: selectedMonth },
+    { enabled: !!selectedOwnerId }
   );
 
   const deleteMutation = trpc.owner.deleteParkingLot.useMutation({
@@ -241,23 +249,91 @@ export default function OperatorDashboard() {
           <div className="lg:col-span-2">
             <div className="space-y-6">
               {selectedOwnerId && selectedOwnerDetail && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{selectedOwnerDetail.user.name}の売上</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">総売上</p>
-                        <p className="text-2xl font-bold">¥{selectedOwnerDetail.salesSummary.totalAmount.toLocaleString()}</p>
+                <>
+                  {/* 売上情報カード */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{selectedOwnerDetail.user.name}の売上</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                          <p className="text-sm text-muted-foreground">総売上</p>
+                          <p className="text-2xl font-bold">¥{selectedOwnerDetail.salesSummary.totalAmount.toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">取引件数</p>
+                          <p className="text-2xl font-bold">{selectedOwnerDetail.salesSummary.totalTransactions}件</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">取引件数</p>
-                        <p className="text-2xl font-bold">{selectedOwnerDetail.salesSummary.totalTransactions}件</p>
+                      
+                      {/* 月別売上 */}
+                      <div className="border-t pt-4">
+                        <p className="text-sm font-medium mb-3">月別売上</p>
+                        <div className="flex gap-2 mb-3">
+                          <select
+                            value={selectedYear}
+                            onChange={(e) => setSelectedYear(Number(e.target.value))}
+                            className="border rounded px-2 py-1 text-sm"
+                          >
+                            {Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                              <option key={year} value={year}>{year}年</option>
+                            ))}
+                          </select>
+                          <select
+                            value={selectedMonth}
+                            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                            className="border rounded px-2 py-1 text-sm"
+                          >
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                              <option key={month} value={month}>{month}月</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="bg-muted/50 rounded-lg p-4 text-center">
+                          <p className="text-sm text-muted-foreground">{selectedYear}年{selectedMonth}月の売上</p>
+                          <p className="text-2xl font-bold">¥{(monthlySales?.totalAmount || 0).toLocaleString()}</p>
+                          <p className="text-sm text-muted-foreground">{monthlySales?.totalTransactions || 0}件の取引</p>
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+
+                  {/* 振込先情報カード */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>振込先情報</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {selectedOwnerDetail.bankInfo?.bankName ? (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <p className="text-muted-foreground">銀行名</p>
+                            <p className="font-medium">{selectedOwnerDetail.bankInfo.bankName}</p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <p className="text-muted-foreground">支店名</p>
+                            <p className="font-medium">{selectedOwnerDetail.bankInfo.branchName || '-'}</p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <p className="text-muted-foreground">口座種別</p>
+                            <p className="font-medium">{selectedOwnerDetail.bankInfo.accountType === 'savings' ? '普通' : selectedOwnerDetail.bankInfo.accountType === 'checking' ? '当座' : '-'}</p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <p className="text-muted-foreground">口座番号</p>
+                            <p className="font-medium">{selectedOwnerDetail.bankInfo.accountNumber || '-'}</p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <p className="text-muted-foreground">口座名義</p>
+                            <p className="font-medium">{selectedOwnerDetail.bankInfo.accountHolder || '-'}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">振込先情報が設定されていません</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </>
               )}
               <Card>
                 <CardHeader>

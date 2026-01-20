@@ -1176,6 +1176,13 @@ export const appRouter = router({
           },
           parkingLots,
           salesSummary,
+          bankInfo: {
+            bankName: user.bankName,
+            branchName: user.branchName,
+            accountType: user.accountType,
+            accountNumber: user.accountNumber,
+            accountHolder: user.accountHolder,
+          },
         };
       }),
 
@@ -1187,6 +1194,22 @@ export const appRouter = router({
     // 全体売上集計
     getTotalSummary: adminProcedure.query(async () => {
       return await getTotalSalesSummary();
+    }),
+
+    // 管理者用：オーナーの月別売上取得
+    getOwnerMonthlySalesByYearMonth: adminProcedure
+      .input(z.object({
+        ownerId: z.number(),
+        year: z.number(),
+        month: z.number().min(1).max(12),
+      }))
+      .query(async ({ input }) => {
+        return await getOwnerMonthlySalesByYearMonth(input.ownerId, input.year, input.month);
+      }),
+
+    // 管理者用：選択可能な年月のリスト
+    getAvailableYearMonths: adminProcedure.query(async () => {
+      return getAvailableYearMonths();
     }),
 
     // 全ユーザー一覧
