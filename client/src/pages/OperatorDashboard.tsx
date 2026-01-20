@@ -455,13 +455,27 @@ export default function OperatorDashboard() {
                               <div className="flex-1">
                                 <p className="font-semibold">{lot.name}</p>
                                 <p className="text-sm text-muted-foreground">{lot.address}</p>
-                                <div className="flex gap-2 mt-2">
+                                <div className="flex gap-2 mt-2 flex-wrap">
                                   <Badge variant="outline">
                                     {lot.totalSpaces}台
                                   </Badge>
                                   <Badge variant={lot.status === 'active' ? 'default' : 'secondary'}>
                                     {lot.status === 'active' ? '有効' : '無効'}
                                   </Badge>
+                                  {lot.spaces && (() => {
+                                    const occupied = lot.spaces.filter((s: { status: string }) => s.status === 'occupied').length;
+                                    const available = lot.spaces.filter((s: { status: string }) => s.status === 'available').length;
+                                    return (
+                                      <>
+                                        <Badge variant="destructive" className="text-xs">
+                                          使用中 {occupied}
+                                        </Badge>
+                                        <Badge className="bg-green-500 text-xs">
+                                          空き {available}
+                                        </Badge>
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                               <Button
@@ -494,13 +508,27 @@ export default function OperatorDashboard() {
                               <div className="flex-1">
                                 <p className="font-semibold">{lot.name}</p>
                                 <p className="text-sm text-muted-foreground">{lot.address}</p>
-                                <div className="flex gap-2 mt-2">
+                                <div className="flex gap-2 mt-2 flex-wrap">
                                   <Badge variant="outline">
                                     {lot.totalSpaces}台
                                   </Badge>
                                   <Badge variant={lot.status === 'active' ? 'default' : 'secondary'}>
                                     {lot.status === 'active' ? '有効' : '無効'}
                                   </Badge>
+                                  {lot.spaces && (() => {
+                                    const occupied = lot.spaces.filter((s: { status: string }) => s.status === 'occupied').length;
+                                    const available = lot.spaces.filter((s: { status: string }) => s.status === 'available').length;
+                                    return (
+                                      <>
+                                        <Badge variant="destructive" className="text-xs">
+                                          使用中 {occupied}
+                                        </Badge>
+                                        <Badge className="bg-green-500 text-xs">
+                                          空き {available}
+                                        </Badge>
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                               <Button
@@ -765,28 +793,30 @@ export default function OperatorDashboard() {
                   一括ダウンロード
                 </Button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-h-80 overflow-y-auto">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 max-h-64 overflow-y-auto p-1">
                 {selectedLot.spaces.map((space) => {
                   const scanUrl = `${window.location.origin}/scan?qr=${space.qrCode}`;
+                  const isOccupied = space.status === 'occupied';
                   return (
-                    <div key={space.id} className="border rounded-lg p-3 text-center bg-white">
-                      <div className="mb-2">
+                    <div key={space.id} className={`border rounded p-2 text-center flex flex-col items-center ${isOccupied ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                      <div className="relative">
                         <QRCodeSVG
                           id={`qr-${space.id}`}
                           value={scanUrl}
-                          size={100}
+                          size={60}
                           level="M"
-                          includeMargin={true}
+                          includeMargin={false}
                         />
+                        <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${isOccupied ? 'bg-red-500' : 'bg-green-500'}`} />
                       </div>
-                      <p className="text-sm font-medium">スペース {space.spaceNumber}</p>
-                      <p className="text-xs text-muted-foreground truncate" title={space.qrCode}>
-                        {space.qrCode.substring(0, 15)}...
-                      </p>
+                      <p className="text-xs font-medium mt-1">スペース {space.spaceNumber}</p>
+                      <Badge variant={isOccupied ? 'destructive' : 'default'} className="text-[10px] px-1 py-0">
+                        {isOccupied ? '使用中' : '空き'}
+                      </Badge>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="mt-1"
+                        className="h-6 px-2 text-xs"
                         onClick={() => {
                           const svg = document.getElementById(`qr-${space.id}`);
                           if (svg) {
@@ -808,8 +838,7 @@ export default function OperatorDashboard() {
                           }
                         }}
                       >
-                        <Download className="h-3 w-3 mr-1" />
-                        保存
+                        <Download className="h-3 w-3" />
                       </Button>
                     </div>
                   );

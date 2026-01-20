@@ -21,6 +21,7 @@ import {
   Loader2,
   Clock,
   Building2,
+  Car,
 } from "lucide-react";
 import { Link, useRoute } from "wouter";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -625,14 +626,53 @@ function ParkingLotSettingsCard() {
             <CardDescription>管理者が設定した駐車場の仕様（読み取り専用）</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* 駐車台数 */}
+            {/* 駐車台数と入庫状況 */}
             <div className="p-4 bg-muted rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <Building2 className="h-4 w-4 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">駐車台数</p>
+                <p className="text-sm text-muted-foreground">駐車台数・入庫状況</p>
               </div>
-              <p className="text-2xl font-semibold">{parkingLot.totalSpaces}台</p>
+              <div className="flex items-center gap-4">
+                <p className="text-2xl font-semibold">{parkingLot.totalSpaces}台</p>
+                {parkingLot.spaces && (() => {
+                  const occupied = parkingLot.spaces.filter((s: { status: string }) => s.status === 'occupied').length;
+                  const available = parkingLot.spaces.filter((s: { status: string }) => s.status === 'available').length;
+                  return (
+                    <div className="flex gap-2">
+                      <Badge variant="destructive">使用中 {occupied}</Badge>
+                      <Badge className="bg-green-500">空き {available}</Badge>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
+
+            {/* 入庫状況詳細 */}
+            {parkingLot.spaces && parkingLot.spaces.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Car className="h-4 w-4 text-muted-foreground" />
+                  <p className="font-semibold">入庫状況詳細</p>
+                </div>
+                <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                  {parkingLot.spaces.map((space: { id: number; spaceNumber: number; status: string }) => (
+                    <div
+                      key={space.id}
+                      className={`p-2 rounded text-center text-xs font-medium ${
+                        space.status === 'occupied'
+                          ? 'bg-red-100 text-red-700 border border-red-200'
+                          : 'bg-green-100 text-green-700 border border-green-200'
+                      }`}
+                    >
+                      {space.spaceNumber}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  • 緑: 空き • 赤: 使用中
+                </p>
+              </div>
+            )}
 
             {/* 料金設定 */}
             <div className="space-y-3">

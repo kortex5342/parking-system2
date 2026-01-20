@@ -363,15 +363,23 @@ export const appRouter = router({
         
         const lotsWithPeriods = await Promise.all(lots.map(async (lot: any) => {
           let periods: any = [];
+          let spaces: any = [];
           try {
             periods = await getMaxPricingPeriodsByLot(lot.id);
           } catch (error) {
             console.error('Error fetching max pricing periods:', error);
             periods = [];
           }
+          try {
+            spaces = await getParkingSpacesByLot(lot.id);
+          } catch (error) {
+            console.error('Error fetching parking spaces:', error);
+            spaces = [];
+          }
           return {
             ...lot,
             timePeriods: periods || [],
+            spaces: spaces || [],
           } as any;
         }));
         
@@ -978,15 +986,23 @@ export const appRouter = router({
         
         const lotsWithPeriods = await Promise.all(lots.map(async (lot: any) => {
           let periods: any = [];
+          let spaces: any = [];
           try {
             periods = await getMaxPricingPeriodsByLot(lot.id);
           } catch (error) {
             console.error('Error fetching max pricing periods:', error);
             periods = [];
           }
+          try {
+            spaces = await getParkingSpacesByLot(lot.id);
+          } catch (error) {
+            console.error('Error fetching parking spaces:', error);
+            spaces = [];
+          }
           return {
             ...lot,
             timePeriods: periods || [],
+            spaces: spaces || [],
           } as any;
         }));
         
@@ -1196,6 +1212,21 @@ export const appRouter = router({
         const parkingLots = await getParkingLotsByOwner(input.userId);
         const salesSummary = await getOwnerSalesSummary(input.userId);
         
+        // 各駐車場に駐車スペース情報を追加
+        const parkingLotsWithSpaces = await Promise.all(parkingLots.map(async (lot: any) => {
+          let spaces: any = [];
+          try {
+            spaces = await getParkingSpacesByLot(lot.id);
+          } catch (error) {
+            console.error('Error fetching parking spaces:', error);
+            spaces = [];
+          }
+          return {
+            ...lot,
+            spaces: spaces || [],
+          };
+        }));
+        
         return {
           user: {
             id: user.id,
@@ -1207,7 +1238,7 @@ export const appRouter = router({
             createdAt: user.createdAt,
             customUrl: user.customUrl,
           },
-          parkingLots,
+          parkingLots: parkingLotsWithSpaces,
           salesSummary,
           bankInfo: {
             bankName: user.bankName,
