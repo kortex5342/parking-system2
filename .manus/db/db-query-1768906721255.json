@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, parkingLotId, spaceNumber, qrCode, status FROM parking_spaces LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 8EBibrbXjhAM6dQ.6d02bcfef11f --database hSBncNyCDqpD2yXpmwmJaw --execute SELECT id, parkingLotId, spaceNumber, qrCode, status FROM parking_spaces LIMIT 5;",
+  "rows": [
+    {
+      "id": "1",
+      "parkingLotId": "NULL",
+      "spaceNumber": "1",
+      "qrCode": "PARK-01-4jEqxEoM",
+      "status": "available"
+    },
+    {
+      "id": "2",
+      "parkingLotId": "NULL",
+      "spaceNumber": "2",
+      "qrCode": "PARK-02-gmAJocC3",
+      "status": "available"
+    },
+    {
+      "id": "3",
+      "parkingLotId": "NULL",
+      "spaceNumber": "3",
+      "qrCode": "PARK-03--ZPM3mMu",
+      "status": "available"
+    },
+    {
+      "id": "4",
+      "parkingLotId": "NULL",
+      "spaceNumber": "4",
+      "qrCode": "PARK-04-fTOMq_yz",
+      "status": "available"
+    },
+    {
+      "id": "5",
+      "parkingLotId": "NULL",
+      "spaceNumber": "5",
+      "qrCode": "PARK-05-XyOWiiSK",
+      "status": "available"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tparkingLotId\tspaceNumber\tqrCode\tstatus\n1\tNULL\t1\tPARK-01-4jEqxEoM\tavailable\n2\tNULL\t2\tPARK-02-gmAJocC3\tavailable\n3\tNULL\t3\tPARK-03--ZPM3mMu\tavailable\n4\tNULL\t4\tPARK-04-fTOMq_yz\tavailable\n5\tNULL\t5\tPARK-05-XyOWiiSK\tavailable\n",
+  "stderr": "",
+  "execution_time_ms": 1563
+}

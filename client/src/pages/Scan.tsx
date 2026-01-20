@@ -116,17 +116,7 @@ export default function Scan() {
 
       {/* ヘッダー */}
       <header className="relative z-10 container py-6">
-        <nav className="flex items-center justify-between">
-          {view !== "payment-success" ? (
-            <Link href="/">
-              <button className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
-                <ArrowLeft className="w-5 h-5" />
-                <span>戻る</span>
-              </button>
-            </Link>
-          ) : (
-            <div />
-          )}
+        <nav className="flex items-center justify-end">
           <div className="flex items-center gap-2">
             <Car className="w-6 h-6 text-foreground" />
             <span className="font-bold">ParkEase</span>
@@ -161,7 +151,11 @@ export default function Scan() {
                 localStorage.setItem("parkingSessionToken", token);
                 setView("entry-success");
               }}
-              onExitConfirm={() => setView("exit-confirm")}
+              onExitConfirm={(token) => {
+                setSessionToken(token);
+                localStorage.setItem("parkingSessionToken", token);
+                setView("exit-confirm");
+              }}
             />
           )}
           
@@ -304,7 +298,7 @@ function SpaceInfoView({
   qrCode: string;
   onBack: () => void;
   onEntrySuccess: (token: string) => void;
-  onExitConfirm: () => void;
+  onExitConfirm: (sessionToken: string) => void;
 }) {
   const { data, isLoading, error } = trpc.parking.getSpaceByQrCode.useQuery({ qrCode });
   const enterMutation = trpc.parking.checkIn.useMutation({
@@ -380,13 +374,13 @@ function SpaceInfoView({
             </>
           )}
           
-          {canExit && (
+          {canExit && activeRecord && (
             <>
               <p className="text-center text-muted-foreground">
                 出庫手続きを行いますか？
               </p>
               <Button 
-                onClick={onExitConfirm}
+                onClick={() => onExitConfirm(activeRecord.sessionToken)}
                 className="w-full"
                 size="lg"
               >

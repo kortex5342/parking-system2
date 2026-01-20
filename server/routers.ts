@@ -1252,7 +1252,22 @@ export const appRouter = router({
 
     // 全駐車場一覧
     getAllParkingLots: adminProcedure.query(async () => {
-      return await getAllParkingLots();
+      const lots = await getAllParkingLots();
+      // 各駐車場に駐車スペース情報を追加
+      const lotsWithSpaces = await Promise.all(lots.map(async (lot: any) => {
+        let spaces: any = [];
+        try {
+          spaces = await getParkingSpacesByLot(lot.id);
+        } catch (error) {
+          console.error('Error fetching parking spaces:', error);
+          spaces = [];
+        }
+        return {
+          ...lot,
+          spaces: spaces || [],
+        };
+      }));
+      return lotsWithSpaces;
     }),
 
     // 全体売上集計
