@@ -88,11 +88,23 @@ import {
 } from "./paypay";
 
 // 管理者専用プロシージャ
-const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== 'admin') {
-    throw new TRPCError({ code: 'FORBIDDEN', message: '管理者権限が必要です' });
-  }
-  return next({ ctx });
+// デモ版: 認証不要、誰でもアクセス可能
+// デモ用のダミー管理者ユーザーを使用
+const DEMO_ADMIN_ID = 999;
+const adminProcedure = publicProcedure.use(({ ctx, next }) => {
+  // デモ版のため、ダミー管理者を設定
+  const demoAdmin = {
+    id: DEMO_ADMIN_ID,
+    openId: 'demo-admin',
+    name: 'デモ管理者',
+    email: 'admin@example.com',
+    loginMethod: 'demo',
+    role: 'admin' as const,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    lastSignedIn: new Date(),
+  };
+  return next({ ctx: { ...ctx, user: ctx.user || demoAdmin } });
 });
 
 // オーナー専用プロシージャ
