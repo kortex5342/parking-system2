@@ -81,6 +81,12 @@ import {
   deleteAllMaxPricingPeriodsForLot,
   deleteMaxPricingPeriodsByLot,
   calculateParkingFeeWithTimePeriods,
+  // グローバル決済設定
+  getAllGlobalPaymentSettings,
+  getEnabledGlobalPaymentSettings,
+  getGlobalPaymentSettingByMethod,
+  upsertGlobalPaymentSetting,
+  deleteGlobalPaymentSetting,
 } from "./db";
 import {
   createPayPayQRCode,
@@ -430,6 +436,16 @@ export const appRouter = router({
           durationMinutes,
         };
       }),
+
+    // グローバル決済設定取得（有効な決済方法のみ）
+    getEnabledPaymentMethods: publicProcedure.query(async () => {
+      const settings = await getEnabledGlobalPaymentSettings();
+      return settings.map(s => ({
+        method: s.method,
+        enabled: s.enabled,
+        // APIキーなどの機密情報は除外
+      }));
+    }),
   }),
 
   // 管理者API
