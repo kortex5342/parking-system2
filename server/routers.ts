@@ -87,6 +87,9 @@ import {
   getGlobalPaymentSettingByMethod,
   upsertGlobalPaymentSetting,
   deleteGlobalPaymentSetting,
+  // CSVエクスポート
+  getOwnerSalesDataForExport,
+  getAllSalesDataForExport,
 } from "./db";
 import {
   createPayPayQRCode,
@@ -1711,6 +1714,161 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         await deleteGlobalPaymentSetting(input.id);
         return { success: true };
+      }),
+
+    // ========== CSVエクスポート ==========
+    // オーナー別売上データCSVエクスポート
+    exportOwnerSalesCSV: adminProcedure
+      .input(z.object({
+        ownerId: z.number(),
+        startDate: z.string().optional(), // ISO形式
+        endDate: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        const startDate = input.startDate ? new Date(input.startDate) : undefined;
+        const endDate = input.endDate ? new Date(input.endDate) : undefined;
+        
+        const data = await getOwnerSalesDataForExport(input.ownerId, startDate, endDate);
+        const owner = await getUserById(input.ownerId);
+        
+        // CSVヘッダー
+        const headers = [
+          'ID',
+          '取引日時',
+          '駐車場ID',
+          'スペース番号',
+          '入庫時刻',
+          '出庫時刻',
+          '駐車時間(分)',
+          '金額(円)',
+          '決済方法',
+          '決済ステータス',
+          'トランザクションID',
+          'デモ決済',
+        ];
+        
+        const paymentMethodLabels: Record<string, string> = {
+          'paypay': 'PayPay',
+          'credit_card': 'クレジットカード',
+          'stripe': 'Stripe',
+          'square': 'Square',
+          'line_pay': 'LINE Pay',
+          'rakuten_pay': '楽天ペイ',
+          'apple_pay': 'Apple Pay',
+        };
+        
+        const rows = data.map(record => [
+          record.id,
+          new Date(record.createdAt).toLocaleString('ja-JP'),
+          record.parkingLotId || '',
+          record.spaceNumber,
+          new Date(record.entryTime).toLocaleString('ja-JP'),
+          new Date(record.exitTime).toLocaleString('ja-JP'),
+          record.durationMinutes,
+          record.amount,
+          paymentMethodLabels[record.paymentMethod] || record.paymentMethod,
+          record.paymentStatus === 'completed' ? '完了' : record.paymentStatus === 'pending' ? '保留' : '失敗',
+          record.transactionId || '',
+          record.isDemo ? 'はい' : 'いいえ',
+        ]);
+        
+        // CSV文字列を生成
+        const csvContent = [
+          headers.join(','),
+          ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        ].join('\n');
+        
+        // 集計情報
+        const totalAmount = data.filter(r => r.paymentStatus === 'completed').reduce((sum, r) => sum + r.amount, 0);
+        const totalTransactions = data.filter(r => r.paymentStatus === 'completed').length;
+        
+        return {
+          csv: csvContent,
+          filename: `sales_${owner?.name || 'owner'}_${new Date().toISOString().split('T')[0]}.csv`,
+          summary: {
+            totalRecords: data.length,
+            completedTransactions: totalTransactions,
+            totalAmount,
+          }
+        };
+      }),
+
+    // 全オーナー売上データCSVエクスポート
+    exportAllSalesCSV: adminProcedure
+      .input(z.object({
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        const startDate = input.startDate ? new Date(input.startDate) : undefined;
+        const endDate = input.endDate ? new Date(input.endDate) : undefined;
+        
+        const data = await getAllSalesDataForExport(startDate, endDate);
+        const owners = await getAllOwners();
+        const ownerMap = new Map(owners.map(o => [o.id, o.name]));
+        
+        // CSVヘッダー
+        const headers = [
+          'ID',
+          '取引日時',
+          'オーナーID',
+          'オーナー名',
+          '駐車場ID',
+          'スペース番号',
+          '入庫時刻',
+          '出庫時刻',
+          '駐車時間(分)',
+          '金額(円)',
+          '決済方法',
+          '決済ステータス',
+          'トランザクションID',
+          'デモ決済',
+        ];
+        
+        const paymentMethodLabels: Record<string, string> = {
+          'paypay': 'PayPay',
+          'credit_card': 'クレジットカード',
+          'stripe': 'Stripe',
+          'square': 'Square',
+          'line_pay': 'LINE Pay',
+          'rakuten_pay': '楽天ペイ',
+          'apple_pay': 'Apple Pay',
+        };
+        
+        const rows = data.map(record => [
+          record.id,
+          new Date(record.createdAt).toLocaleString('ja-JP'),
+          record.ownerId || '',
+          ownerMap.get(record.ownerId || 0) || '',
+          record.parkingLotId || '',
+          record.spaceNumber,
+          new Date(record.entryTime).toLocaleString('ja-JP'),
+          new Date(record.exitTime).toLocaleString('ja-JP'),
+          record.durationMinutes,
+          record.amount,
+          paymentMethodLabels[record.paymentMethod] || record.paymentMethod,
+          record.paymentStatus === 'completed' ? '完了' : record.paymentStatus === 'pending' ? '保留' : '失敗',
+          record.transactionId || '',
+          record.isDemo ? 'はい' : 'いいえ',
+        ]);
+        
+        const csvContent = [
+          headers.join(','),
+          ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        ].join('\n');
+        
+        const totalAmount = data.filter(r => r.paymentStatus === 'completed').reduce((sum, r) => sum + r.amount, 0);
+        const totalTransactions = data.filter(r => r.paymentStatus === 'completed').length;
+        
+        return {
+          csv: csvContent,
+          filename: `sales_all_${new Date().toISOString().split('T')[0]}.csv`,
+          summary: {
+            totalRecords: data.length,
+            completedTransactions: totalTransactions,
+            totalAmount,
+          }
+        };
       }),
   }),
 });

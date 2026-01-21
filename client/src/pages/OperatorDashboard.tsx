@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Trash2, X, Plus, Download, QrCode, CreditCard, Users } from "lucide-react";
+import { Loader2, Trash2, X, Plus, Download, QrCode, CreditCard, Users, ExternalLink, FileDown } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import {
@@ -50,6 +50,11 @@ export default function OperatorDashboard() {
   // 月別売上用のステート
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  // CSVエクスポート用のステート
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState('');
+  const [exportEndDate, setExportEndDate] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
   // 編集ダイアログ用の時間帯設定ステート
   const [editTimePeriodEnabled, setEditTimePeriodEnabled] = useState(false);
   const [editDayEnabled, setEditDayEnabled] = useState(true);
@@ -321,8 +326,25 @@ export default function OperatorDashboard() {
                     onClick={() => setSelectedOwnerId(owner.id)}
                   >
                     <CardContent className="pt-4">
-                      <p className="font-semibold text-sm">{owner.name}</p>
-                      <p className="text-xs text-muted-foreground">{owner.openId}</p>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold text-sm">{owner.name}</p>
+                          <p className="text-xs text-muted-foreground">{owner.customUrl}</p>
+                        </div>
+                        {owner.customUrl && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(`/owner/${owner.customUrl}`, '_blank');
+                            }}
+                            title="オーナーページを開く"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
@@ -338,7 +360,17 @@ export default function OperatorDashboard() {
                   {/* 売上情報カード */}
                   <Card>
                     <CardHeader>
-                      <CardTitle>{selectedOwnerDetail.user.name}の売上</CardTitle>
+                      <div className="flex items-center justify-between">
+                        <CardTitle>{selectedOwnerDetail.user.name}の売上</CardTitle>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowExportDialog(true)}
+                        >
+                          <FileDown className="h-4 w-4 mr-2" />
+                          CSVエクスポート
+                        </Button>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-2 gap-4 mb-6">
@@ -1201,6 +1233,99 @@ export default function OperatorDashboard() {
               disabled={createParkingLotMutation.isPending}
             >
               {createParkingLotMutation.isPending ? '追加中...' : '追加'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* CSVエクスポートダイアログ */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>売上データCSVエクスポート</DialogTitle>
+            <DialogDescription>
+              {selectedOwnerDetail?.user.name}の売上データをCSV形式でダウンロードします
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>開始日（任意）</Label>
+              <Input
+                type="date"
+                value={exportStartDate}
+                onChange={(e) => setExportStartDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>終了日（任意）</Label>
+              <Input
+                type="date"
+                value={exportEndDate}
+                onChange={(e) => setExportEndDate(e.target.value)}
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              日付を指定しない場合は全期間のデータをエクスポートします
+            </p>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowExportDialog(false);
+                setExportStartDate('');
+                setExportEndDate('');
+              }}
+            >
+              キャンセル
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!selectedOwnerId) return;
+                setIsExporting(true);
+                try {
+                  const response = await fetch(`/api/trpc/operator.exportOwnerSalesCSV?input=${encodeURIComponent(JSON.stringify({
+                    ownerId: selectedOwnerId,
+                    startDate: exportStartDate || undefined,
+                    endDate: exportEndDate || undefined,
+                  }))}`);
+                  const data = await response.json();
+                  const result = data.result.data;
+                  
+                  // CSVダウンロード
+                  const blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = result.filename;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(url);
+                  
+                  toast.success(`エクスポート完了: ${result.summary.completedTransactions}件の取引、合計¥${result.summary.totalAmount.toLocaleString()}`);
+                  setShowExportDialog(false);
+                  setExportStartDate('');
+                  setExportEndDate('');
+                } catch (error) {
+                  toast.error('エクスポートに失敗しました');
+                } finally {
+                  setIsExporting(false);
+                }
+              }}
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  エクスポート中...
+                </>
+              ) : (
+                <>
+                  <FileDown className="h-4 w-4 mr-2" />
+                  ダウンロード
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>

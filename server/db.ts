@@ -1641,3 +1641,80 @@ export async function deleteGlobalPaymentSetting(id: number) {
   
   await db.delete(globalPaymentSettings).where(eq(globalPaymentSettings.id, id));
 }
+
+
+// ========== CSVエクスポート用売上データ取得 ==========
+
+// オーナーの売上データをCSVエクスポート用に取得（期間指定対応）
+export async function getOwnerSalesDataForExport(ownerId: number, startDate?: Date, endDate?: Date) {
+  const db = await getDb();
+  if (!db) return [];
+
+  let query = db.select({
+    id: paymentRecords.id,
+    parkingLotId: paymentRecords.parkingLotId,
+    spaceNumber: paymentRecords.spaceNumber,
+    entryTime: paymentRecords.entryTime,
+    exitTime: paymentRecords.exitTime,
+    durationMinutes: paymentRecords.durationMinutes,
+    amount: paymentRecords.amount,
+    paymentMethod: paymentRecords.paymentMethod,
+    paymentStatus: paymentRecords.paymentStatus,
+    transactionId: paymentRecords.transactionId,
+    isDemo: paymentRecords.isDemo,
+    createdAt: paymentRecords.createdAt,
+  }).from(paymentRecords)
+    .where(eq(paymentRecords.ownerId, ownerId))
+    .orderBy(desc(paymentRecords.createdAt));
+
+  const results = await query;
+
+  // 期間フィルタリング（createdAtベース）
+  let filteredResults = results;
+  if (startDate || endDate) {
+    filteredResults = results.filter(record => {
+      const recordDate = new Date(record.createdAt);
+      if (startDate && recordDate < startDate) return false;
+      if (endDate && recordDate > endDate) return false;
+      return true;
+    });
+  }
+
+  return filteredResults;
+}
+
+// 全オーナーの売上データをCSVエクスポート用に取得（期間指定対応）
+export async function getAllSalesDataForExport(startDate?: Date, endDate?: Date) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const results = await db.select({
+    id: paymentRecords.id,
+    ownerId: paymentRecords.ownerId,
+    parkingLotId: paymentRecords.parkingLotId,
+    spaceNumber: paymentRecords.spaceNumber,
+    entryTime: paymentRecords.entryTime,
+    exitTime: paymentRecords.exitTime,
+    durationMinutes: paymentRecords.durationMinutes,
+    amount: paymentRecords.amount,
+    paymentMethod: paymentRecords.paymentMethod,
+    paymentStatus: paymentRecords.paymentStatus,
+    transactionId: paymentRecords.transactionId,
+    isDemo: paymentRecords.isDemo,
+    createdAt: paymentRecords.createdAt,
+  }).from(paymentRecords)
+    .orderBy(desc(paymentRecords.createdAt));
+
+  // 期間フィルタリング
+  let filteredResults = results;
+  if (startDate || endDate) {
+    filteredResults = results.filter(record => {
+      const recordDate = new Date(record.createdAt);
+      if (startDate && recordDate < startDate) return false;
+      if (endDate && recordDate > endDate) return false;
+      return true;
+    });
+  }
+
+  return filteredResults;
+}
