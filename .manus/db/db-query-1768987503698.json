@@ -1,0 +1,100 @@
+{
+  "query": "SELECT * FROM parking_spaces LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 8EBibrbXjhAM6dQ.6d02bcfef11f --database hSBncNyCDqpD2yXpmwmJaw --execute SELECT * FROM parking_spaces LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "spaceNumber": "1",
+      "status": "available",
+      "qrCode": "PARK-01-4jEqxEoM",
+      "createdAt": "2026-01-08 08:38:15",
+      "updatedAt": "2026-01-20 11:28:00",
+      "parkingLotId": "NULL"
+    },
+    {
+      "id": "2",
+      "spaceNumber": "2",
+      "status": "available",
+      "qrCode": "PARK-02-gmAJocC3",
+      "createdAt": "2026-01-08 08:38:15",
+      "updatedAt": "2026-01-08 10:32:54",
+      "parkingLotId": "NULL"
+    },
+    {
+      "id": "3",
+      "spaceNumber": "3",
+      "status": "available",
+      "qrCode": "PARK-03--ZPM3mMu",
+      "createdAt": "2026-01-08 08:38:15",
+      "updatedAt": "2026-01-08 08:38:15",
+      "parkingLotId": "NULL"
+    },
+    {
+      "id": "4",
+      "spaceNumber": "4",
+      "status": "available",
+      "qrCode": "PARK-04-fTOMq_yz",
+      "createdAt": "2026-01-08 08:38:15",
+      "updatedAt": "2026-01-08 08:38:15",
+      "parkingLotId": "NULL"
+    },
+    {
+      "id": "5",
+      "spaceNumber": "5",
+      "status": "available",
+      "qrCode": "PARK-05-XyOWiiSK",
+      "createdAt": "2026-01-08 08:38:16",
+      "updatedAt": "2026-01-08 08:38:16",
+      "parkingLotId": "NULL"
+    },
+    {
+      "id": "6",
+      "spaceNumber": "6",
+      "status": "available",
+      "qrCode": "PARK-06-dsYFLtEO",
+      "createdAt": "2026-01-08 08:38:16",
+      "updatedAt": "2026-01-08 08:38:16",
+      "parkingLotId": "NULL"
+    },
+    {
+      "id": "7",
+      "spaceNumber": "7",
+      "status": "available",
+      "qrCode": "PARK-07-h-PfxrdH",
+      "createdAt": "2026-01-08 08:38:16",
+      "updatedAt": "2026-01-08 08:38:16",
+      "parkingLotId": "NULL"
+    },
+    {
+      "id": "8",
+      "spaceNumber": "8",
+      "status": "available",
+      "qrCode": "PARK-08-KNcwkaMJ",
+      "createdAt": "2026-01-08 08:38:16",
+      "updatedAt": "2026-01-08 08:38:16",
+      "parkingLotId": "NULL"
+    },
+    {
+      "id": "9",
+      "spaceNumber": "9",
+      "status": "available",
+      "qrCode": "PARK-09-pltEGlPW",
+      "createdAt": "2026-01-08 08:38:16",
+      "updatedAt": "2026-01-08 08:38:16",
+      "parkingLotId": "NULL"
+    },
+    {
+      "id": "10",
+      "spaceNumber": "10",
+      "status": "available",
+      "qrCode": "PARK-10-BeVBbXjD",
+      "createdAt": "2026-01-08 08:38:17",
+      "updatedAt": "2026-01-08 08:38:17",
+      "parkingLotId": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tspaceNumber\tstatus\tqrCode\tcreatedAt\tupdatedAt\tparkingLotId\n1\t1\tavailable\tPARK-01-4jEqxEoM\t2026-01-08 08:38:15\t2026-01-20 11:28:00\tNULL\n2\t2\tavailable\tPARK-02-gmAJocC3\t2026-01-08 08:38:15\t2026-01-08 10:32:54\tNULL\n3\t3\tavailable\tPARK-03--ZPM3mMu\t2026-01-08 08:38:15\t2026-01-08 08:38:15\tNULL\n4\t4\tavailable\tPARK-04-fTOMq_yz\t2026-01-08 08:38:15\t2026-01-08 08:38:15\tNULL\n5\t5\tavailable\tPARK-05-XyOWiiSK\t2026-01-08 08:38:16\t2026-01-08 08:38:16\tNULL\n6\t6\tavailable\tPARK-06-dsYFLtEO\t2026-01-08 08:38:16\t2026-01-08 08:38:16\tNULL\n7\t7\tavailable\tPARK-07-h-PfxrdH\t2026-01-08 08:38:16\t2026-01-08 08:38:16\tNULL\n8\t8\tavailable\tPARK-08-KNcwkaMJ\t2026-01-08 08:38:16\t2026-01-08 08:38:16\tNULL\n9\t9\tavailable\tPARK-09-pltEGlPW\t2026-01-08 08:38:16\t2026-01-08 08:38:16\tNULL\n10\t10\tavailable\tPARK-10-BeVBbXjD\t2026-01-08 08:38:17\t2026-01-08 08:38:17\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 1568
+}

@@ -28,6 +28,9 @@ export default function Scan() {
       const generatedQr = `LOT-${params.lotId}-SPACE-${params.spaceNumber}`;
       setQrCode(generatedQr);
       setView("space-info");
+      // 新しいQRコードをスキャンした場合は、既存のセッションをクリア
+      localStorage.removeItem("parkingSessionToken");
+      setSessionToken(null);
       return;
     }
     
@@ -36,6 +39,10 @@ export default function Scan() {
     if (qr) {
       setQrCode(qr);
       setView("space-info");
+      // 新しいQRコードをスキャンした場合は、既存のセッションをクリア
+      localStorage.removeItem("parkingSessionToken");
+      setSessionToken(null);
+      return;
     }
     
     // 決済完了時の処理
@@ -47,21 +54,23 @@ export default function Scan() {
       setView("payment-success");
       toast.success("決済が完了しました");
       window.history.replaceState({}, '', '/scan');
+      return;
     } else if (paymentStatus === "cancel" && token) {
       setSessionToken(token);
       setView("exit-confirm");
       toast.info("決済がキャンセルされました");
       window.history.replaceState({}, '', '/scan');
+      return;
     }
     
-    // ローカルストレージからセッショントークンを復元
+    // QRコードが指定されていない場合のみ、ローカルストレージからセッショントークンを復元
     const savedToken = localStorage.getItem("parkingSessionToken");
     if (savedToken) {
       setSessionToken(savedToken);
       // 保存されたセッションがある場合は、出庫確認画面に自動遷移
       setView("exit-confirm");
     }
-  }, []);
+  }, [params.lotId, params.spaceNumber]);
 
   // QRコードスキャナーの初期化
   useEffect(() => {
@@ -77,6 +86,9 @@ export default function Scan() {
           setQrCode(decodedText);
           setShowCamera(false);
           setView("space-info");
+          // 新しいQRコードをスキャンした場合は、既存のセッションをクリア
+          localStorage.removeItem("parkingSessionToken");
+          setSessionToken(null);
           scanner.clear();
         },
         (error) => {
@@ -99,6 +111,9 @@ export default function Scan() {
     if (manualInput.trim()) {
       setQrCode(manualInput.trim());
       setView("space-info");
+      // 新しいQRコードを入力した場合は、既存のセッションをクリア
+      localStorage.removeItem("parkingSessionToken");
+      setSessionToken(null);
     }
   };
 

@@ -12,6 +12,7 @@ import OwnerDashboard from "./pages/OwnerDashboard";
 import OperatorDashboard from "./pages/OperatorDashboard";
 import OwnerLotQR from "./pages/OwnerLotQR";
 import OwnerPage from "./pages/OwnerPage";
+import OwnerByIdPage from "./pages/OwnerByIdPage";
 
 function Router() {
   return (
@@ -21,6 +22,7 @@ function Router() {
       <Route path="/scan/:lotId/:spaceNumber" component={Scan} />
       <Route path="/admin" component={Admin} />
       <Route path="/admin/print-qr" component={PrintQR} />
+      <Route path="/owner/id/:openId" component={OwnerByIdPage} />
       <Route path="/owner/:customUrl" component={OwnerPage} />
       <Route path="/owner" component={OwnerDashboard} />
       <Route path="/owner/lot/:lotId/qr" component={OwnerLotQR} />

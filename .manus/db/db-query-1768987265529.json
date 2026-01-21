@@ -1,0 +1,38 @@
+{
+  "query": "SELECT id, spaceId, spaceNumber, sessionToken, status FROM parking_records WHERE status = 'active';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 8EBibrbXjhAM6dQ.6d02bcfef11f --database hSBncNyCDqpD2yXpmwmJaw --execute SELECT id, spaceId, spaceNumber, sessionToken, status FROM parking_records WHERE status = 'active';",
+  "rows": [
+    {
+      "id": "90001",
+      "spaceId": "30001",
+      "spaceNumber": "1",
+      "sessionToken": "Wj7dvtxjOnV2UwUdkfu6-p2m5V0e4qUY",
+      "status": "active"
+    },
+    {
+      "id": "120001",
+      "spaceId": "30003",
+      "spaceNumber": "3",
+      "sessionToken": "b_kqtPjkIBhOdSwm43mXj2ShRdBbnj4f",
+      "status": "active"
+    },
+    {
+      "id": "120002",
+      "spaceId": "30002",
+      "spaceNumber": "2",
+      "sessionToken": "mLAVeD95xZDKANTEVJ5qVONwW-zyTMz9",
+      "status": "active"
+    },
+    {
+      "id": "150002",
+      "spaceId": "1",
+      "spaceNumber": "1",
+      "sessionToken": "hZbCA_xZLBWUPz-TfK__Fg0VJERJA6f_",
+      "status": "active"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tspaceId\tspaceNumber\tsessionToken\tstatus\n90001\t30001\t1\tWj7dvtxjOnV2UwUdkfu6-p2m5V0e4qUY\tactive\n120001\t30003\t3\tb_kqtPjkIBhOdSwm43mXj2ShRdBbnj4f\tactive\n120002\t30002\t2\tmLAVeD95xZDKANTEVJ5qVONwW-zyTMz9\tactive\n150002\t1\t1\thZbCA_xZLBWUPz-TfK__Fg0VJERJA6f_\tactive\n",
+  "stderr": "",
+  "execution_time_ms": 1524
+}

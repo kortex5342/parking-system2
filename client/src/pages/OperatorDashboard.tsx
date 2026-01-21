@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Trash2, X, Plus, Download, QrCode } from "lucide-react";
+import { Loader2, Trash2, X, Plus, Download, QrCode, Users, CreditCard } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import {
@@ -16,6 +16,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PaymentSettingsTab } from "@/components/PaymentSettingsTab";
 
 export default function OperatorDashboard() {
   const [selectedOwnerId, setSelectedOwnerId] = useState<number | null>(null);
@@ -266,6 +268,19 @@ export default function OperatorDashboard() {
 
       {/* メインコンテンツ */}
       <main className="container py-8">
+        <Tabs defaultValue="owners" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-flex">
+            <TabsTrigger value="owners" className="gap-2">
+              <Users className="w-4 h-4" />
+              オーナー管理
+            </TabsTrigger>
+            <TabsTrigger value="payment" className="gap-2">
+              <CreditCard className="w-4 h-4" />
+              決済設定
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="owners">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* オーナー一覧 */}
           <div className="lg:col-span-1">
@@ -320,6 +335,26 @@ export default function OperatorDashboard() {
             <div className="space-y-6">
               {selectedOwnerId && selectedOwnerDetail && (
                 <>
+                  {/* オーナーマイページへのリンク */}
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <CardTitle>{selectedOwnerDetail.user.name}</CardTitle>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(`/owner/id/${selectedOwnerDetail.user.openId}`, '_blank')}
+                      >
+                        オーナーマイページを開く
+                      </Button>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-sm text-muted-foreground">
+                        <p>ID: {selectedOwnerDetail.user.openId}</p>
+                        <p>メール: {selectedOwnerDetail.user.email}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
                   {/* 売上情報カード */}
                   <Card>
                     <CardHeader>
@@ -553,6 +588,12 @@ export default function OperatorDashboard() {
             </div>
           </div>
         </div>
+          </TabsContent>
+
+          <TabsContent value="payment">
+            <PaymentSettingsTab />
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* 駐車場詳細編集ダイアログ */}
