@@ -30,7 +30,6 @@ export default function OwnerDashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [match, params] = useRoute("/owner/:customUrl");
-  const [matchById, paramsById] = useRoute("/owner/id/:openId");
   
   // カスタムURL経由でアクセスした場合、そのオーナーのデータを取得
   const customUrl = match && params?.customUrl ? (params.customUrl as string) : null;
@@ -38,16 +37,6 @@ export default function OwnerDashboard() {
     { customUrl: customUrl || '' },
     { enabled: !!customUrl }
   );
-  
-  // openId経由でアクセスした場合
-  const openId = matchById && paramsById?.openId ? (paramsById.openId as string) : null;
-  const { data: ownerByIdData } = trpc.operator.getOwnerByOpenId.useQuery(
-    { openId: openId || '' },
-    { enabled: !!openId }
-  );
-  
-  // オーナーIDを決定（openId > customUrl > デフォルト）
-  const effectiveOwnerId = ownerByIdData?.id || ownerData?.id || undefined;
 
   return (
     <div className="min-h-screen bg-background">
@@ -87,7 +76,7 @@ export default function OwnerDashboard() {
               <OverviewTab />
             </TabsContent>
             <TabsContent value="profile">
-              <ProfileTab openId={openId || ownerByIdData?.openId || ownerData?.openId} />
+              <ProfileTab />
             </TabsContent>
           </div>
         </Tabs>
@@ -514,7 +503,7 @@ function PayoutScheduleCard({ payoutSchedules, isLoading }: { payoutSchedules: a
 }
 
 // プロフィールタブ
-function ProfileTab({ openId }: { openId?: string }) {
+function ProfileTab() {
   const { data, isLoading } = trpc.owner.getMyPage.useQuery();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<any>(null);
@@ -581,7 +570,7 @@ function ProfileTab({ openId }: { openId?: string }) {
               </div>
               <div className="flex gap-2">
                 <Button 
-                  onClick={() => updateMutation.mutate({ ...editData, openId })}
+                  onClick={() => updateMutation.mutate(editData)}
                   disabled={updateMutation.isPending}
                 >
                   {updateMutation.isPending ? '保存中...' : '保存'}

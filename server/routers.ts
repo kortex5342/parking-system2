@@ -1,7 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router, adminProcedure } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import Stripe from "stripe";
@@ -81,12 +81,19 @@ import {
   deleteAllMaxPricingPeriodsForLot,
   deleteMaxPricingPeriodsByLot,
   calculateParkingFeeWithTimePeriods,
-  getUserByOpenId,
 } from "./db";
 import {
   createPayPayQRCode,
   verifyPayPayCredentials,
 } from "./paypay";
+
+// 管理者専用プロシージャ
+const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== 'admin') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: '管理者権限が必要です' });
+  }
+  return next({ ctx });
+});
 
 // オーナー専用プロシージャ
 // デモ版: 認証不要、誰でもアクセス可能
@@ -900,22 +907,12 @@ export const appRouter = router({
     // プロフィール更新
     updateProfile: ownerProcedure
       .input(z.object({
-        openId: z.string().optional(), // openIdが指定された場合はそのユーザーを更新
         name: z.string().optional(),
         email: z.string().email().optional(),
         phone: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        // openIdが指定された場合はそのユーザーを更新、なければctx.userを更新
-        let userId = ctx.user.id;
-        if (input.openId) {
-          const targetUser = await getUserByOpenId(input.openId);
-          if (targetUser) {
-            userId = targetUser.id;
-          }
-        }
-        const { openId, ...profileData } = input;
-        await updateUserProfile(userId, profileData);
+        await updateUserProfile(ctx.user.id, input);
         return { success: true };
       }),
 
@@ -1238,7 +1235,6 @@ export const appRouter = router({
         return {
           user: {
             id: user.id,
-            openId: user.openId,
             name: user.name,
             email: user.email,
             phone: user.phone,
@@ -1631,17 +1627,6 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         await deleteParkingLot(input.lotId);
         return { success: true };
-      }),
-
-    // openIdでオーナー情報取得
-    getOwnerByOpenId: publicProcedure
-      .input(z.object({ openId: z.string() }))
-      .query(async ({ input }) => {
-        const owner = await getUserByOpenId(input.openId);
-        if (!owner || owner.role !== 'owner') {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'オーナーが見つかりません' });
-        }
-        return owner;
       }),
   }),
 });

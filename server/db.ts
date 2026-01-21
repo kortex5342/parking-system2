@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, lte, sum } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, parkingSpaces, parkingRecords, paymentRecords, paymentMethods, payoutSchedules, InsertParkingSpace, InsertParkingRecord, InsertPaymentRecord, InsertPaymentMethod, InsertPayoutSchedule } from "../drizzle/schema";
+import { InsertUser, users, parkingSpaces, parkingRecords, paymentRecords, paymentMethods, payoutSchedules, InsertParkingSpace, InsertParkingRecord, InsertPaymentRecord, InsertPaymentMethod, InsertPayoutSchedule, globalPaymentSettings, InsertGlobalPaymentSetting } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { nanoid } from 'nanoid';
 
@@ -1566,4 +1566,78 @@ export async function deleteMaxPricingPeriodsByLot(parkingLotId: number) {
   if (!db) return;
 
   await db.delete(maxPricingPeriods).where(eq(maxPricingPeriods.parkingLotId, parkingLotId));
+}
+
+
+// ========== Global Payment Settings ==========
+
+// 全てのグローバル決済設定を取得
+export async function getAllGlobalPaymentSettings() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(globalPaymentSettings).orderBy(globalPaymentSettings.id);
+}
+
+// 有効なグローバル決済設定のみ取得
+export async function getEnabledGlobalPaymentSettings() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(globalPaymentSettings).where(eq(globalPaymentSettings.enabled, true));
+}
+
+// 決済方法でグローバル決済設定を取得
+export async function getGlobalPaymentSettingByMethod(method: string) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const results = await db.select().from(globalPaymentSettings).where(eq(globalPaymentSettings.method, method as any));
+  return results[0] || null;
+}
+
+// グローバル決済設定を作成または更新（upsert）
+export async function upsertGlobalPaymentSetting(data: Partial<InsertGlobalPaymentSetting> & { method: InsertGlobalPaymentSetting['method'] }) {
+  const db = await getDb();
+  if (!db) return;
+  
+  const existing = await getGlobalPaymentSettingByMethod(data.method);
+  
+  if (existing) {
+    // 更新
+    const updateData: Record<string, any> = {};
+    if (data.enabled !== undefined) updateData.enabled = data.enabled;
+    if (data.apiKey !== undefined) updateData.apiKey = data.apiKey;
+    if (data.apiSecret !== undefined) updateData.apiSecret = data.apiSecret;
+    if (data.merchantId !== undefined) updateData.merchantId = data.merchantId;
+    if (data.stripeSecretKey !== undefined) updateData.stripeSecretKey = data.stripeSecretKey;
+    if (data.stripePublishableKey !== undefined) updateData.stripePublishableKey = data.stripePublishableKey;
+    if (data.feePercentage !== undefined) updateData.feePercentage = data.feePercentage;
+    if (data.feeFixed !== undefined) updateData.feeFixed = data.feeFixed;
+    
+    await db.update(globalPaymentSettings)
+      .set(updateData)
+      .where(eq(globalPaymentSettings.method, data.method));
+  } else {
+    // 新規作成
+    await db.insert(globalPaymentSettings).values({
+      method: data.method,
+      enabled: data.enabled ?? true,
+      apiKey: data.apiKey,
+      apiSecret: data.apiSecret,
+      merchantId: data.merchantId,
+      stripeSecretKey: data.stripeSecretKey,
+      stripePublishableKey: data.stripePublishableKey,
+      feePercentage: data.feePercentage ?? "0",
+      feeFixed: data.feeFixed ?? 0,
+    });
+  }
+}
+
+// グローバル決済設定を削除
+export async function deleteGlobalPaymentSetting(method: string) {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.delete(globalPaymentSettings).where(eq(globalPaymentSettings.method, method as any));
 }

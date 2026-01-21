@@ -1,8 +1,0 @@
-{
-  "query": "SELECT id, lotId, spaceNumber, qrCode FROM parking_spaces LIMIT 10;",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 8EBibrbXjhAM6dQ.6d02bcfef11f --database hSBncNyCDqpD2yXpmwmJaw --execute SELECT id, lotId, spaceNumber, qrCode FROM parking_spaces LIMIT 10;",
-  "returncode": 1,
-  "logs": [
-    "ERROR 1054 (42S22) at line 1: Unknown column 'lotid' in 'field list'"
-  ]
-}

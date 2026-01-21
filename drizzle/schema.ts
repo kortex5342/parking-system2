@@ -194,3 +194,30 @@ export const maxPricingPeriods = mysqlTable("max_pricing_periods", {
 
 export type MaxPricingPeriod = typeof maxPricingPeriods.$inferSelect;
 export type InsertMaxPricingPeriod = typeof maxPricingPeriods.$inferInsert;
+
+
+/**
+ * グローバル決済設定テーブル
+ * オペレーターが一元管理する決済方法の設定
+ * 全オーナーが共通で使用する
+ */
+export const globalPaymentSettings = mysqlTable("global_payment_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  method: mysqlEnum("method", ["paypay", "rakuten_pay", "line_pay", "apple_pay", "ic_card", "credit_card"]).notNull().unique(),
+  enabled: boolean("enabled").default(true).notNull(),
+  // APIキー情報（暗号化推奨）
+  apiKey: varchar("apiKey", { length: 256 }),
+  apiSecret: varchar("apiSecret", { length: 256 }),
+  merchantId: varchar("merchantId", { length: 64 }),
+  // Stripe用
+  stripeSecretKey: varchar("stripeSecretKey", { length: 256 }),
+  stripePublishableKey: varchar("stripePublishableKey", { length: 256 }),
+  // 手数料設定
+  feePercentage: decimal("feePercentage", { precision: 5, scale: 2 }).default("0").notNull(),
+  feeFixed: int("feeFixed").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type GlobalPaymentSetting = typeof globalPaymentSettings.$inferSelect;
+export type InsertGlobalPaymentSetting = typeof globalPaymentSettings.$inferInsert;
