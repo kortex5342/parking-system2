@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Trash2, X, Plus, Download, QrCode } from "lucide-react";
+import { Loader2, Trash2, X, Plus, Download, QrCode, CreditCard, Users } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import {
@@ -16,6 +16,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { GlobalPaymentSettingsTab } from "@/components/GlobalPaymentSettingsTab";
 
 export default function OperatorDashboard() {
   const [selectedOwnerId, setSelectedOwnerId] = useState<number | null>(null);
@@ -266,6 +268,19 @@ export default function OperatorDashboard() {
 
       {/* メインコンテンツ */}
       <main className="container py-8">
+        <Tabs defaultValue="owners" className="space-y-6">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="owners" className="flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              オーナー管理
+            </TabsTrigger>
+            <TabsTrigger value="payment" className="flex items-center gap-2">
+              <CreditCard className="w-4 h-4" />
+              決済設定
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="owners">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* オーナー一覧 */}
           <div className="lg:col-span-1">
@@ -553,6 +568,12 @@ export default function OperatorDashboard() {
             </div>
           </div>
         </div>
+          </TabsContent>
+
+          <TabsContent value="payment">
+            <GlobalPaymentSettingsTab />
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* 駐車場詳細編集ダイアログ */}

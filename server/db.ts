@@ -1635,9 +1635,9 @@ export async function upsertGlobalPaymentSetting(data: Partial<InsertGlobalPayme
 }
 
 // グローバル決済設定を削除
-export async function deleteGlobalPaymentSetting(method: string) {
+export async function deleteGlobalPaymentSetting(id: number) {
   const db = await getDb();
   if (!db) return;
   
-  await db.delete(globalPaymentSettings).where(eq(globalPaymentSettings.method, method as any));
+  await db.delete(globalPaymentSettings).where(eq(globalPaymentSettings.id, id));
 }

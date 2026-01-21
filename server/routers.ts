@@ -1644,6 +1644,74 @@ export const appRouter = router({
         await deleteParkingLot(input.lotId);
         return { success: true };
       }),
+
+    // ========== グローバル決済設定 ==========
+    // 全グローバル決済設定取得
+    getGlobalPaymentSettings: adminProcedure.query(async () => {
+      return await getAllGlobalPaymentSettings();
+    }),
+
+    // グローバル決済設定追加
+    createGlobalPaymentSetting: adminProcedure
+      .input(z.object({
+        method: z.enum(['paypay', 'rakuten_pay', 'line_pay', 'apple_pay', 'ic_card', 'credit_card']),
+        enabled: z.boolean().default(true),
+        feePercentage: z.number().min(0).max(100).default(0),
+        feeFixed: z.number().min(0).default(0),
+        apiKey: z.string().optional(),
+        apiSecret: z.string().optional(),
+        merchantId: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const existing = await getGlobalPaymentSettingByMethod(input.method);
+        if (existing) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'この決済方法は既に設定されています' });
+        }
+        const id = await upsertGlobalPaymentSetting({
+          ...input,
+          feePercentage: input.feePercentage.toString(),
+        });
+        return { success: true, id };
+      }),
+
+    // グローバル決済設定更新
+    updateGlobalPaymentSetting: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        enabled: z.boolean().optional(),
+        feePercentage: z.number().min(0).max(100).optional(),
+        feeFixed: z.number().min(0).optional(),
+        apiKey: z.string().optional(),
+        apiSecret: z.string().optional(),
+        merchantId: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...updateData } = input;
+        // 既存の設定を取得して更新
+        const settings = await getAllGlobalPaymentSettings();
+        const existing = settings.find((s: any) => s.id === id);
+        if (!existing) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '決済設定が見つかりません' });
+        }
+        await upsertGlobalPaymentSetting({
+          method: existing.method,
+          enabled: updateData.enabled ?? existing.enabled,
+          feePercentage: (updateData.feePercentage ?? parseFloat(existing.feePercentage)).toString(),
+          feeFixed: updateData.feeFixed ?? existing.feeFixed,
+          apiKey: updateData.apiKey ?? existing.apiKey,
+          apiSecret: updateData.apiSecret ?? existing.apiSecret,
+          merchantId: updateData.merchantId ?? existing.merchantId,
+        });
+        return { success: true };
+      }),
+
+    // グローバル決済設定削除
+    deleteGlobalPaymentSetting: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteGlobalPaymentSetting(input.id);
+        return { success: true };
+      }),
   }),
 });
 
