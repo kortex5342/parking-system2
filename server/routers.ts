@@ -910,39 +910,60 @@ export const appRouter = router({
     }),
 
     // マイページ情報取得
-    getMyPage: ownerProcedure.query(async ({ ctx }) => {
-      const user = await getUserById(ctx.user.id);
-      if (!user) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'ユーザーが見つかりません' });
-      }
-      
-      const parkingLots = await getParkingLotsByOwner(ctx.user.id);
-      const salesSummary = await getOwnerSalesSummary(ctx.user.id);
-      
-      return {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone,
-          role: user.role,
-          status: user.status,
-          createdAt: user.createdAt,
-        },
-        parkingLots,
-        salesSummary,
-      };
-    }),
+    getMyPage: publicProcedure
+      .input(z.object({ customUrl: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        // customUrlが指定された場合はそのオーナーのデータを取得
+        let ownerId = ctx.user?.id || DEMO_USER_ID;
+        if (input?.customUrl) {
+          const owner = await getOwnerByCustomUrl(input.customUrl);
+          if (owner) {
+            ownerId = owner.id;
+          }
+        }
+        
+        const user = await getUserById(ownerId);
+        if (!user) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'ユーザーが見つかりません' });
+        }
+        
+        const parkingLots = await getParkingLotsByOwner(ownerId);
+        const salesSummary = await getOwnerSalesSummary(ownerId);
+        
+        return {
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            role: user.role,
+            status: user.status,
+            createdAt: user.createdAt,
+          },
+          parkingLots,
+          salesSummary,
+        };
+      }),
 
     // プロフィール更新
-    updateProfile: ownerProcedure
+    updateProfile: publicProcedure
       .input(z.object({
+        customUrl: z.string().optional(),
         name: z.string().optional(),
         email: z.string().email().optional(),
         phone: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        await updateUserProfile(ctx.user.id, input);
+        // customUrlが指定された場合はそのオーナーのデータを更新
+        let ownerId = ctx.user?.id || DEMO_USER_ID;
+        if (input.customUrl) {
+          const owner = await getOwnerByCustomUrl(input.customUrl);
+          if (owner) {
+            ownerId = owner.id;
+          }
+        }
+        const { customUrl, ...updateData } = input;
+        await updateUserProfile(ownerId, updateData);
         return { success: true };
       }),
 
@@ -975,30 +996,38 @@ export const appRouter = router({
       }),
 
     // 駐車場一覧取得（時間帯設定付き）
-    getParkingLots: ownerProcedure.query(async ({ ctx }) => {
-      const lots = await getParkingLotsByOwner(ctx.user.id);
-      if (!lots) {
-        return [];
-      }
-      
-      // 各駐車場の時間帯設定を取得
-      const lotsWithPeriods = await Promise.all(lots.map(async (lot: any) => {
-        let periods: any = [];
-        try {
-          periods = await getMaxPricingPeriodsByLot(lot.id);
-        } catch (error) {
-          // テーブルが存在しない場合を無視
-          console.error('Error fetching max pricing periods:', error);
-          periods = [];
+    getParkingLots: publicProcedure
+      .input(z.object({ customUrl: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        let ownerId = ctx.user?.id || DEMO_USER_ID;
+        if (input?.customUrl) {
+          const owner = await getOwnerByCustomUrl(input.customUrl);
+          if (owner) ownerId = owner.id;
         }
-        return {
-          ...lot,
-          timePeriods: periods || [],
-        } as any;
-      }));
-      
-      return lotsWithPeriods as any;
-    }),
+        
+        const lots = await getParkingLotsByOwner(ownerId);
+        if (!lots) {
+          return [];
+        }
+        
+        // 各駐車場の時間帯設定を取得
+        const lotsWithPeriods = await Promise.all(lots.map(async (lot: any) => {
+          let periods: any = [];
+          try {
+            periods = await getMaxPricingPeriodsByLot(lot.id);
+          } catch (error) {
+            // テーブルが存在しない場合を無視
+            console.error('Error fetching max pricing periods:', error);
+            periods = [];
+          }
+          return {
+            ...lot,
+            timePeriods: periods || [],
+          } as any;
+        }));
+        
+        return lotsWithPeriods as any;
+      }),
 
     // カスタムURLでオーナーの駐車場一覧取得
     getParkingLotsByCustomUrl: publicProcedure
@@ -1109,50 +1138,93 @@ export const appRouter = router({
       }),
 
     // 決済履歴取得
-    getPayments: ownerProcedure
-      .input(z.object({ limit: z.number().min(1).max(500).default(100) }))
+    getPayments: publicProcedure
+      .input(z.object({ 
+        customUrl: z.string().optional(),
+        limit: z.number().min(1).max(500).default(100) 
+      }))
       .query(async ({ input, ctx }) => {
-        return await getPaymentRecordsByOwner(ctx.user.id, input.limit);
+        let ownerId = ctx.user?.id || DEMO_USER_ID;
+        if (input.customUrl) {
+          const owner = await getOwnerByCustomUrl(input.customUrl);
+          if (owner) ownerId = owner.id;
+        }
+        return await getPaymentRecordsByOwner(ownerId, input.limit);
       }),
 
     // 売上集計取得
-    getSalesSummary: ownerProcedure.query(async ({ ctx }) => {
-      return await getOwnerSalesSummary(ctx.user.id);
-    }),
+    getSalesSummary: publicProcedure
+      .input(z.object({ customUrl: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        let ownerId = ctx.user?.id || DEMO_USER_ID;
+        if (input?.customUrl) {
+          const owner = await getOwnerByCustomUrl(input.customUrl);
+          if (owner) ownerId = owner.id;
+        }
+        return await getOwnerSalesSummary(ownerId);
+      }),
 
     // 日ごとの売上データ
-    getDailySalesData: ownerProcedure.query(async ({ ctx }) => {
-      return await getOwnerDailySalesData(ctx.user.id);
-    }),
+    getDailySalesData: publicProcedure
+      .input(z.object({ customUrl: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        let ownerId = ctx.user?.id || DEMO_USER_ID;
+        if (input?.customUrl) {
+          const owner = await getOwnerByCustomUrl(input.customUrl);
+          if (owner) ownerId = owner.id;
+        }
+        return await getOwnerDailySalesData(ownerId);
+      }),
 
     // 月ごとの売上データ
-    getMonthlySalesData: ownerProcedure.query(async ({ ctx }) => {
-      return await getOwnerMonthlySalesData(ctx.user.id);
-    }),
+    getMonthlySalesData: publicProcedure
+      .input(z.object({ customUrl: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        let ownerId = ctx.user?.id || DEMO_USER_ID;
+        if (input?.customUrl) {
+          const owner = await getOwnerByCustomUrl(input.customUrl);
+          if (owner) ownerId = owner.id;
+        }
+        return await getOwnerMonthlySalesData(ownerId);
+      }),
 
     // 特定の年月の売上データ
-    getMonthlySalesByYearMonth: ownerProcedure
+    getMonthlySalesByYearMonth: publicProcedure
       .input(z.object({
+        customUrl: z.string().optional(),
         year: z.number(),
         month: z.number().min(1).max(12),
       }))
       .query(async ({ ctx, input }) => {
-        return await getOwnerMonthlySalesByYearMonth(ctx.user.id, input.year, input.month);
+        let ownerId = ctx.user?.id || DEMO_USER_ID;
+        if (input.customUrl) {
+          const owner = await getOwnerByCustomUrl(input.customUrl);
+          if (owner) ownerId = owner.id;
+        }
+        return await getOwnerMonthlySalesByYearMonth(ownerId, input.year, input.month);
       }),
 
     // 選択可能な年月のリスト
-    getAvailableYearMonths: ownerProcedure.query(async () => {
+    getAvailableYearMonths: publicProcedure.query(async () => {
       return getAvailableYearMonths();
     }),
 
     // 銀行情報取得
-    getBankInfo: ownerProcedure.query(async ({ ctx }) => {
-      return await getBankInfo(ctx.user.id);
-    }),
+    getBankInfo: publicProcedure
+      .input(z.object({ customUrl: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        let ownerId = ctx.user?.id || DEMO_USER_ID;
+        if (input?.customUrl) {
+          const owner = await getOwnerByCustomUrl(input.customUrl);
+          if (owner) ownerId = owner.id;
+        }
+        return await getBankInfo(ownerId);
+      }),
 
     // 銀行情報更新
-    updateBankInfo: ownerProcedure
+    updateBankInfo: publicProcedure
       .input(z.object({
+        customUrl: z.string().optional(),
         bankName: z.string().optional(),
         branchName: z.string().optional(),
         accountType: z.enum(['checking', 'savings']).optional(),
@@ -1160,43 +1232,64 @@ export const appRouter = router({
         accountHolder: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        await updateBankInfo(ctx.user.id, input);
+        let ownerId = ctx.user?.id || DEMO_USER_ID;
+        if (input.customUrl) {
+          const owner = await getOwnerByCustomUrl(input.customUrl);
+          if (owner) ownerId = owner.id;
+        }
+        const { customUrl, ...updateData } = input;
+        await updateBankInfo(ownerId, updateData);
         return { success: true };
       }),
 
     // 振込スケジュール取得
-    getPayoutSchedules: ownerProcedure.query(async ({ ctx }) => {
-      return await getPayoutSchedulesByOwner(ctx.user.id);
-    }),
+    getPayoutSchedules: publicProcedure
+      .input(z.object({ customUrl: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        let ownerId = ctx.user?.id || DEMO_USER_ID;
+        if (input?.customUrl) {
+          const owner = await getOwnerByCustomUrl(input.customUrl);
+          if (owner) ownerId = owner.id;
+        }
+        return await getPayoutSchedulesByOwner(ownerId);
+      }),
 
     // 駐車場情報取得（読み取り専用）
-    getParkingLotInfo: ownerProcedure.query(async ({ ctx }) => {
-      const parkingLots = await getParkingLotsByOwner(ctx.user.id);
-      if (parkingLots.length === 0) {
-        return null;
-      }
-      const lot = parkingLots[0];
-      
-      // Get time period settings
-      let timePeriods: any = [];
-      try {
-        timePeriods = await getMaxPricingPeriodsByLot(lot.id);
-      } catch (error) {
-        console.error('Error fetching max pricing periods:', error);
-        timePeriods = [];
-      }
-      
-      return {
-        id: lot.id,
-        name: lot.name,
-        totalSpaces: lot.totalSpaces,
-        pricingUnitMinutes: lot.pricingUnitMinutes,
-        pricingAmount: lot.pricingAmount,
-        maxDailyAmount: lot.maxDailyAmount,
-        maxDailyAmountEnabled: lot.maxDailyAmountEnabled,
-        timePeriods: timePeriods || [],
-      };
-    }),
+    getParkingLotInfo: publicProcedure
+      .input(z.object({ customUrl: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        let ownerId = ctx.user?.id || DEMO_USER_ID;
+        if (input?.customUrl) {
+          const owner = await getOwnerByCustomUrl(input.customUrl);
+          if (owner) ownerId = owner.id;
+        }
+        
+        const parkingLots = await getParkingLotsByOwner(ownerId);
+        if (parkingLots.length === 0) {
+          return null;
+        }
+        const lot = parkingLots[0];
+        
+        // Get time period settings
+        let timePeriods: any = [];
+        try {
+          timePeriods = await getMaxPricingPeriodsByLot(lot.id);
+        } catch (error) {
+          console.error('Error fetching max pricing periods:', error);
+          timePeriods = [];
+        }
+        
+        return {
+          id: lot.id,
+          name: lot.name,
+          totalSpaces: lot.totalSpaces,
+          pricingUnitMinutes: lot.pricingUnitMinutes,
+          pricingAmount: lot.pricingAmount,
+          maxDailyAmount: lot.maxDailyAmount,
+          maxDailyAmountEnabled: lot.maxDailyAmountEnabled,
+          timePeriods: timePeriods || [],
+        };
+      }),
   }),
 
   // ========== 運営者向けAPI ==========

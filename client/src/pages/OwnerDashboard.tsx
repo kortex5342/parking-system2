@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, createContext, useContext } from 'react';
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,13 @@ import {
 } from "lucide-react";
 import { Link, useRoute } from "wouter";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+// カスタムURLコンテキスト
+const CustomUrlContext = createContext<string | null>(null);
+
+function useCustomUrl() {
+  return useContext(CustomUrlContext);
+}
 
 export default function OwnerDashboard() {
   const { user } = useAuth();
@@ -59,27 +66,29 @@ export default function OwnerDashboard() {
 
       {/* メインコンテンツ */}
       <main className="container py-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 lg:w-[300px]">
-            <TabsTrigger value="overview" className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              <span className="hidden sm:inline">売上</span>
-            </TabsTrigger>
-            <TabsTrigger value="profile" className="flex items-center gap-2">
-              <User className="h-4 w-4" />
-              <span className="hidden sm:inline">設定</span>
-            </TabsTrigger>
-          </TabsList>
+        <CustomUrlContext.Provider value={customUrl}>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-2 lg:w-[300px]">
+              <TabsTrigger value="overview" className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4" />
+                <span className="hidden sm:inline">売上</span>
+              </TabsTrigger>
+              <TabsTrigger value="profile" className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                <span className="hidden sm:inline">設定</span>
+              </TabsTrigger>
+            </TabsList>
 
-          <div className="mt-6">
-            <TabsContent value="overview">
-              <OverviewTab />
-            </TabsContent>
-            <TabsContent value="profile">
-              <ProfileTab />
-            </TabsContent>
-          </div>
-        </Tabs>
+            <div className="mt-6">
+              <TabsContent value="overview">
+                <OverviewTab />
+              </TabsContent>
+              <TabsContent value="profile">
+                <ProfileTab />
+              </TabsContent>
+            </div>
+          </Tabs>
+        </CustomUrlContext.Provider>
       </main>
     </div>
   );
@@ -87,18 +96,29 @@ export default function OwnerDashboard() {
 
 // 概要タブ
 function OverviewTab() {
+  const customUrl = useCustomUrl();
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   
-  const { data: salesSummary, isLoading: summaryLoading } = trpc.owner.getSalesSummary.useQuery();
-  const { data: dailyData, isLoading: dailyLoading } = trpc.owner.getDailySalesData.useQuery();
-  const { data: monthlyData, isLoading: monthlyLoading } = trpc.owner.getMonthlySalesData.useQuery();
-  const { data: bankInfo } = trpc.owner.getBankInfo.useQuery();
-  const { data: payoutSchedules, isLoading: payoutLoading } = trpc.owner.getPayoutSchedules.useQuery();
+  const { data: salesSummary, isLoading: summaryLoading } = trpc.owner.getSalesSummary.useQuery(
+    customUrl ? { customUrl } : undefined
+  );
+  const { data: dailyData, isLoading: dailyLoading } = trpc.owner.getDailySalesData.useQuery(
+    customUrl ? { customUrl } : undefined
+  );
+  const { data: monthlyData, isLoading: monthlyLoading } = trpc.owner.getMonthlySalesData.useQuery(
+    customUrl ? { customUrl } : undefined
+  );
+  const { data: bankInfo } = trpc.owner.getBankInfo.useQuery(
+    customUrl ? { customUrl } : undefined
+  );
+  const { data: payoutSchedules, isLoading: payoutLoading } = trpc.owner.getPayoutSchedules.useQuery(
+    customUrl ? { customUrl } : undefined
+  );
   const { data: availableYearMonths } = trpc.owner.getAvailableYearMonths.useQuery();
   const { data: selectedMonthSales, isLoading: selectedMonthLoading } = trpc.owner.getMonthlySalesByYearMonth.useQuery(
-    { year: selectedYear, month: selectedMonth },
+    { year: selectedYear, month: selectedMonth, customUrl: customUrl || undefined },
     { enabled: !!selectedYear && !!selectedMonth }
   );
 
@@ -275,6 +295,7 @@ function OverviewTab() {
 
 // 振込先設定カード
 function BankInfoCard({ bankInfo }: any) {
+  const customUrl = useCustomUrl();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
     bankName: bankInfo?.bankName || '',
@@ -355,7 +376,7 @@ function BankInfoCard({ bankInfo }: any) {
             </div>
             <div className="flex gap-2">
               <Button 
-                onClick={() => updateMutation.mutate(editData)}
+                onClick={() => updateMutation.mutate({ ...editData, customUrl: customUrl || undefined })}
                 disabled={updateMutation.isPending}
               >
                 {updateMutation.isPending ? '保存中...' : '保存'}
@@ -504,7 +525,10 @@ function PayoutScheduleCard({ payoutSchedules, isLoading }: { payoutSchedules: a
 
 // プロフィールタブ
 function ProfileTab() {
-  const { data, isLoading } = trpc.owner.getMyPage.useQuery();
+  const customUrl = useCustomUrl();
+  const { data, isLoading } = trpc.owner.getMyPage.useQuery(
+    customUrl ? { customUrl } : undefined
+  );
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<any>(null);
 
@@ -570,7 +594,7 @@ function ProfileTab() {
               </div>
               <div className="flex gap-2">
                 <Button 
-                  onClick={() => updateMutation.mutate(editData)}
+                  onClick={() => updateMutation.mutate({ ...editData, customUrl: customUrl || undefined })}
                   disabled={updateMutation.isPending}
                 >
                   {updateMutation.isPending ? '保存中...' : '保存'}
@@ -651,8 +675,7 @@ function ProfileTab() {
 
 // 駐車場設定カード（読み取り専用）
 function ParkingLotSettingsCard() {
-  const [match, params] = useRoute("/owner/:customUrl");
-  const customUrl = match && params?.customUrl ? (params.customUrl as string) : null;
+  const customUrl = useCustomUrl();
   
   const { data: parkingLots, isLoading, error } = customUrl 
     ? trpc.parking.getParkingLotsByCustomUrl.useQuery({ customUrl })
