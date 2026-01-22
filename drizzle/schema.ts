@@ -221,3 +221,64 @@ export const globalPaymentSettings = mysqlTable("global_payment_settings", {
 
 export type GlobalPaymentSetting = typeof globalPaymentSettings.$inferSelect;
 export type InsertGlobalPaymentSetting = typeof globalPaymentSettings.$inferInsert;
+
+
+/**
+ * 車両ナンバー認識記録テーブル
+ * 監視カメラからの画像をLPR APIで解析した結果を保存
+ */
+export const vehicleNumberRecords = mysqlTable("vehicle_number_records", {
+  id: int("id").autoincrement().primaryKey(),
+  parkingLotId: int("parkingLotId").notNull().references(() => parkingLots.id, { onDelete: "cascade" }),
+  // ナンバープレート情報
+  area: varchar("area", { length: 20 }), // 地域名（例：練馬）
+  classNumber: varchar("classNumber", { length: 10 }), // 分類番号（例：300）
+  kana: varchar("kana", { length: 5 }), // かな文字（例：あ）
+  digits: varchar("digits", { length: 10 }), // 一連番号（例：1234）
+  fullNumber: varchar("fullNumber", { length: 50 }), // フルナンバー（例：練馬 300 あ 1234）
+  // プレート詳細
+  plateType: varchar("plateType", { length: 20 }), // 種類（大板/中板/外交/自衛）
+  plateUse: varchar("plateUse", { length: 20 }), // 用途（自家/事業）
+  plateColor: varchar("plateColor", { length: 10 }), // 色（白/緑/黄/黒）
+  // 画像情報
+  imageUrl: text("imageUrl"), // 撮影画像のURL（S3保存）
+  // 認識結果
+  recognitionSuccess: boolean("recognitionSuccess").default(false).notNull(), // 認識成功したか
+  rawResponse: text("rawResponse"), // LPR APIの生レスポンス（JSON）
+  // 日時情報
+  capturedAt: bigint("capturedAt", { mode: "number" }).notNull(), // 撮影日時（UTC Unix timestamp ms）
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type VehicleNumberRecord = typeof vehicleNumberRecords.$inferSelect;
+export type InsertVehicleNumberRecord = typeof vehicleNumberRecords.$inferInsert;
+
+/**
+ * カメラ設定テーブル
+ * 各駐車場に設置されたカメラの設定情報
+ */
+export const cameraSettings = mysqlTable("camera_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  parkingLotId: int("parkingLotId").notNull().references(() => parkingLots.id, { onDelete: "cascade" }),
+  cameraName: varchar("cameraName", { length: 100 }).notNull(), // カメラ名
+  cameraType: varchar("cameraType", { length: 50 }), // カメラ種類（qwatch, esp32cam, raspberrypi等）
+  // カメラ接続情報
+  ipAddress: varchar("ipAddress", { length: 45 }), // カメラのIPアドレス
+  port: int("port").default(80), // ポート番号
+  username: varchar("username", { length: 100 }), // 認証用ユーザー名
+  password: varchar("password", { length: 256 }), // 認証用パスワード（暗号化推奨）
+  snapshotPath: varchar("snapshotPath", { length: 256 }), // 静止画取得パス（例：/snapshot.jpg）
+  // 撮影設定
+  captureIntervalMinutes: int("captureIntervalMinutes").default(60).notNull(), // 撮影間隔（分）
+  enabled: boolean("enabled").default(true).notNull(), // 有効/無効
+  lastCaptureAt: bigint("lastCaptureAt", { mode: "number" }), // 最終撮影日時
+  // LPR API設定
+  lprApiToken: varchar("lprApiToken", { length: 256 }), // LPR APIトークン
+  lprApiUrl: varchar("lprApiUrl", { length: 256 }), // LPR APIエンドポイント
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CameraSetting = typeof cameraSettings.$inferSelect;
+export type InsertCameraSetting = typeof cameraSettings.$inferInsert;

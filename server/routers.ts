@@ -90,6 +90,18 @@ import {
   // CSVエクスポート
   getOwnerSalesDataForExport,
   getAllSalesDataForExport,
+  // 車両ナンバー認識
+  createVehicleNumberRecord,
+  getVehicleNumberRecordsByParkingLot,
+  getVehicleNumberRecordsByDateRange,
+  getAllVehicleNumberRecords,
+  getVehicleNumberRecordsByOwner,
+  createCameraSetting,
+  getCameraSettingsByParkingLot,
+  updateCameraSetting,
+  deleteCameraSetting,
+  getAllEnabledCameraSettings,
+  getCameraSettingById,
 } from "./db";
 import {
   createPayPayQRCode,
@@ -1254,6 +1266,125 @@ export const appRouter = router({
         return await getPayoutSchedulesByOwner(ownerId);
       }),
 
+    // ========== 車両ナンバー認識 ==========
+    // 車両ナンバー記録取得（オーナー用）
+    getVehicleNumberRecords: publicProcedure
+      .input(z.object({
+        customUrl: z.string().optional(),
+        parkingLotId: z.number().optional(),
+        limit: z.number().default(100),
+      }))
+      .query(async ({ ctx, input }) => {
+        let ownerId = ctx.user?.id || DEMO_USER_ID;
+        if (input.customUrl) {
+          const owner = await getOwnerByCustomUrl(input.customUrl);
+          if (owner) ownerId = owner.id;
+        }
+        
+        if (input.parkingLotId) {
+          return await getVehicleNumberRecordsByParkingLot(input.parkingLotId, input.limit);
+        }
+        return await getVehicleNumberRecordsByOwner(ownerId, input.limit);
+      }),
+
+    // カメラ設定取得（オーナー用）
+    getCameraSettings: publicProcedure
+      .input(z.object({
+        customUrl: z.string().optional(),
+        parkingLotId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        let ownerId = ctx.user?.id || DEMO_USER_ID;
+        if (input.customUrl) {
+          const owner = await getOwnerByCustomUrl(input.customUrl);
+          if (owner) ownerId = owner.id;
+        }
+        
+        // 駐車場がオーナーのものか確認
+        const lot = await getParkingLotById(input.parkingLotId);
+        if (!lot || lot.ownerId !== ownerId) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'この駐車場のカメラ設定を取得する権限がありません' });
+        }
+        
+        return await getCameraSettingsByParkingLot(input.parkingLotId);
+      }),
+
+    // カメラ設定追加（オーナー用）
+    createCameraSetting: ownerProcedure
+      .input(z.object({
+        parkingLotId: z.number(),
+        cameraName: z.string(),
+        cameraType: z.string().optional(),
+        ipAddress: z.string().optional(),
+        port: z.number().optional(),
+        username: z.string().optional(),
+        password: z.string().optional(),
+        snapshotPath: z.string().optional(),
+        captureIntervalMinutes: z.number().optional(),
+        enabled: z.boolean().optional(),
+        lprApiToken: z.string().optional(),
+        lprApiUrl: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const lot = await getParkingLotById(input.parkingLotId);
+        if (!lot || lot.ownerId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'この駐車場にカメラを追加する権限がありません' });
+        }
+        
+        const id = await createCameraSetting(input);
+        return { success: true, id };
+      }),
+
+    // カメラ設定更新（オーナー用）
+    updateCameraSetting: ownerProcedure
+      .input(z.object({
+        cameraId: z.number(),
+        cameraName: z.string().optional(),
+        cameraType: z.string().optional(),
+        ipAddress: z.string().optional(),
+        port: z.number().optional(),
+        username: z.string().optional(),
+        password: z.string().optional(),
+        snapshotPath: z.string().optional(),
+        captureIntervalMinutes: z.number().optional(),
+        enabled: z.boolean().optional(),
+        lprApiToken: z.string().optional(),
+        lprApiUrl: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const camera = await getCameraSettingById(input.cameraId);
+        if (!camera) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'カメラ設定が見つかりません' });
+        }
+        
+        const lot = await getParkingLotById(camera.parkingLotId);
+        if (!lot || lot.ownerId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'このカメラ設定を更新する権限がありません' });
+        }
+        
+        const { cameraId, ...updateData } = input;
+        await updateCameraSetting(cameraId, updateData);
+        return { success: true };
+      }),
+
+    // カメラ設定削除（オーナー用）
+    deleteCameraSetting: ownerProcedure
+      .input(z.object({ cameraId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const camera = await getCameraSettingById(input.cameraId);
+        if (!camera) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'カメラ設定が見つかりません' });
+        }
+        
+        const lot = await getParkingLotById(camera.parkingLotId);
+        if (!lot || lot.ownerId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'このカメラ設定を削除する権限がありません' });
+        }
+        
+        await deleteCameraSetting(input.cameraId);
+        return { success: true };
+      }),
+
     // 駐車場情報取得（読み取り専用）
     getParkingLotInfo: publicProcedure
       .input(z.object({ customUrl: z.string().optional() }).optional())
@@ -1895,6 +2026,92 @@ export const appRouter = router({
             totalAmount,
           }
         };
+      }),
+
+    // ========== 車両ナンバー認識 ==========
+    // 全車両ナンバー記録取得（オペレーター用）
+    getVehicleNumberRecords: adminProcedure
+      .input(z.object({
+        parkingLotId: z.number().optional(),
+        limit: z.number().default(100),
+      }))
+      .query(async ({ input }) => {
+        if (input.parkingLotId) {
+          return await getVehicleNumberRecordsByParkingLot(input.parkingLotId, input.limit);
+        }
+        return await getAllVehicleNumberRecords(input.limit);
+      }),
+
+    // 日付範囲で車両ナンバー記録取得
+    getVehicleNumberRecordsByDate: adminProcedure
+      .input(z.object({
+        parkingLotId: z.number(),
+        startDate: z.string(), // ISO形式
+        endDate: z.string(),
+      }))
+      .query(async ({ input }) => {
+        const startTimestamp = new Date(input.startDate).getTime();
+        const endTimestamp = new Date(input.endDate).getTime();
+        return await getVehicleNumberRecordsByDateRange(input.parkingLotId, startTimestamp, endTimestamp);
+      }),
+
+    // ========== カメラ設定 ==========
+    // カメラ設定一覧取得
+    getCameraSettings: adminProcedure
+      .input(z.object({ parkingLotId: z.number() }))
+      .query(async ({ input }) => {
+        return await getCameraSettingsByParkingLot(input.parkingLotId);
+      }),
+
+    // カメラ設定追加
+    createCameraSetting: adminProcedure
+      .input(z.object({
+        parkingLotId: z.number(),
+        cameraName: z.string(),
+        cameraType: z.string().optional(),
+        ipAddress: z.string().optional(),
+        port: z.number().optional(),
+        username: z.string().optional(),
+        password: z.string().optional(),
+        snapshotPath: z.string().optional(),
+        captureIntervalMinutes: z.number().optional(),
+        enabled: z.boolean().optional(),
+        lprApiToken: z.string().optional(),
+        lprApiUrl: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await createCameraSetting(input);
+        return { success: true, id };
+      }),
+
+    // カメラ設定更新
+    updateCameraSetting: adminProcedure
+      .input(z.object({
+        cameraId: z.number(),
+        cameraName: z.string().optional(),
+        cameraType: z.string().optional(),
+        ipAddress: z.string().optional(),
+        port: z.number().optional(),
+        username: z.string().optional(),
+        password: z.string().optional(),
+        snapshotPath: z.string().optional(),
+        captureIntervalMinutes: z.number().optional(),
+        enabled: z.boolean().optional(),
+        lprApiToken: z.string().optional(),
+        lprApiUrl: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { cameraId, ...updateData } = input;
+        await updateCameraSetting(cameraId, updateData);
+        return { success: true };
+      }),
+
+    // カメラ設定削除
+    deleteCameraSetting: adminProcedure
+      .input(z.object({ cameraId: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteCameraSetting(input.cameraId);
+        return { success: true };
       }),
 
     // 全オーナー売上データCSVエクスポート

@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Trash2, X, Plus, Download, QrCode, CreditCard, Users, ExternalLink, FileDown } from "lucide-react";
+import { Loader2, Trash2, X, Plus, Download, QrCode, CreditCard, Users, ExternalLink, FileDown, Car, Camera, Clock, Search, CheckCircle, XCircle, Image as ImageIcon } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import {
@@ -12,6 +12,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -284,10 +285,14 @@ export default function OperatorDashboard() {
       {/* メインコンテンツ */}
       <main className="container py-8">
         <Tabs defaultValue="owners" className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-lg grid-cols-3">
             <TabsTrigger value="owners" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
               オーナー管理
+            </TabsTrigger>
+            <TabsTrigger value="vehicles" className="flex items-center gap-2">
+              <Car className="w-4 h-4" />
+              車両ナンバー
             </TabsTrigger>
             <TabsTrigger value="payment" className="flex items-center gap-2">
               <CreditCard className="w-4 h-4" />
@@ -610,6 +615,10 @@ export default function OperatorDashboard() {
             </div>
           </div>
         </div>
+          </TabsContent>
+
+          <TabsContent value="vehicles">
+            <VehicleNumbersTab />
           </TabsContent>
 
           <TabsContent value="payment">
@@ -1340,6 +1349,258 @@ export default function OperatorDashboard() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+
+// 車両ナンバータブ
+function VehicleNumbersTab() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedParkingLotId, setSelectedParkingLotId] = useState<number | undefined>(undefined);
+  
+  const { data: records, isLoading, refetch } = trpc.operator.getVehicleNumberRecords.useQuery({
+    parkingLotId: selectedParkingLotId,
+    limit: 200,
+  });
+  
+  const { data: parkingLots } = trpc.operator.getAllParkingLots.useQuery();
+
+  interface VehicleRecord {
+    id: number;
+    parkingLotId: number;
+    area: string | null;
+    classNumber: string | null;
+    kana: string | null;
+    digits: string | null;
+    fullNumber: string | null;
+    plateType: string | null;
+    plateUse: string | null;
+    plateColor: string | null;
+    imageUrl: string | null;
+    recognitionSuccess: boolean;
+    capturedAt: number;
+    createdAt: Date;
+  }
+
+  // フィルタリング
+  const filteredRecords = records?.filter((record: VehicleRecord) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      record.fullNumber?.toLowerCase().includes(query) ||
+      record.area?.toLowerCase().includes(query) ||
+      record.digits?.toLowerCase().includes(query)
+    );
+  }) || [];
+
+  // 日時フォーマット
+  const formatDateTime = (timestamp: number) => {
+    return new Date(timestamp).toLocaleString('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // プレートカラーのバッジ色
+  const getPlateColorBadge = (color: string | null) => {
+    switch (color) {
+      case '白':
+        return <Badge variant="outline" className="bg-white text-black border-gray-300">白</Badge>;
+      case '緑':
+        return <Badge className="bg-green-600">緑</Badge>;
+      case '黄':
+        return <Badge className="bg-yellow-400 text-black">黄</Badge>;
+      case '黒':
+        return <Badge className="bg-black text-white">黒</Badge>;
+      default:
+        return <Badge variant="secondary">{color || '不明'}</Badge>;
+    }
+  };
+
+  // 駐車場名を取得
+  const getParkingLotName = (lotId: number) => {
+    const lot = parkingLots?.find((l: any) => l.id === lotId);
+    return lot?.name || `駐車場 #${lotId}`;
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* 統計サマリー */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">総記録数</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{records?.length || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              認識成功
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {records?.filter((r: VehicleRecord) => r.recognitionSuccess).length || 0}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <XCircle className="h-4 w-4 text-red-500" />
+              認識失敗
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {records?.filter((r: VehicleRecord) => !r.recognitionSuccess).length || 0}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">認識率</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {records && records.length > 0
+                ? Math.round((records.filter((r: VehicleRecord) => r.recognitionSuccess).length / records.length) * 100)
+                : 0}%
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 検索・フィルター */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Search className="h-5 w-5" />
+            検索・フィルター
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <Input
+                placeholder="ナンバーで検索（例：練馬、1234）"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <div className="w-full sm:w-64">
+              <select
+                className="w-full p-2 border rounded-md bg-background"
+                value={selectedParkingLotId || ''}
+                onChange={(e) => setSelectedParkingLotId(e.target.value ? parseInt(e.target.value) : undefined)}
+              >
+                <option value="">全ての駐車場</option>
+                {parkingLots?.map((lot: any) => (
+                  <option key={lot.id} value={lot.id}>{lot.name}</option>
+                ))}
+              </select>
+            </div>
+            <Button variant="outline" onClick={() => refetch()}>
+              更新
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 記録一覧 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>全車両ナンバー記録</CardTitle>
+          <CardDescription>
+            全駐車場の車両ナンバー認識履歴（最新200件）
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : filteredRecords.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Car className="h-12 w-12 mb-4 opacity-50" />
+              <p>車両ナンバーの記録がありません</p>
+              <p className="text-sm mt-2">カメラから画像が送信されると、ここに表示されます</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredRecords.map((record: VehicleRecord) => (
+                <div
+                  key={record.id}
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`p-2 rounded-full ${record.recognitionSuccess ? 'bg-green-100' : 'bg-red-100'}`}>
+                      <Car className={`h-5 w-5 ${record.recognitionSuccess ? 'text-green-600' : 'text-red-600'}`} />
+                    </div>
+                    <div>
+                      {record.recognitionSuccess && record.fullNumber ? (
+                        <div className="font-bold text-lg">{record.fullNumber}</div>
+                      ) : (
+                        <div className="text-muted-foreground">認識失敗</div>
+                      )}
+                      <div className="text-sm text-muted-foreground flex items-center gap-4">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {formatDateTime(record.capturedAt)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Camera className="h-3 w-3" />
+                          {getParkingLotName(record.parkingLotId)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {record.plateColor && getPlateColorBadge(record.plateColor)}
+                    {record.plateUse && (
+                      <Badge variant="outline" className="text-xs">
+                        {record.plateUse}
+                      </Badge>
+                    )}
+                    {record.imageUrl && (
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <ImageIcon className="h-4 w-4" />
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-3xl">
+                          <DialogHeader>
+                            <DialogTitle>撮影画像</DialogTitle>
+                            <DialogDescription>
+                              {formatDateTime(record.capturedAt)} - {getParkingLotName(record.parkingLotId)}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="mt-4">
+                            <img
+                              src={record.imageUrl}
+                              alt="撮影画像"
+                              className="w-full rounded-lg"
+                            />
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -502,3 +502,13 @@
 ## 及川駐車場削除問題の修正
 - [x] 及川駐車場だけ削除できない問題を調査
 - [x] 「権限が無い」エラーの原因を特定（owner.deleteParkingLot→operator.deleteParkingLotに変更）
+
+## 車両ナンバー認識機能の追加
+- [x] LPR API（https://lpr.sensing-api.com/）の仕様調査
+- [x] API対応監視カメラの調査・推奨
+- [x] データベーススキーマ設計（車両ナンバー記録テーブル、カメラ設定テーブル）
+- [x] カメラからの画像受信APIエンドポイント実装（/api/camera/upload）
+- [x] LPR API連携実装（server/lpr.ts）
+- [x] オーナーページに車両ナンバー履歴表示機能を追加（車両タブ）
+- [x] 管理ページに車両ナンバー履歴表示機能を追加（車両ナンバータブ）
+- [x] テスト作成（vehicleNumber.test.ts）

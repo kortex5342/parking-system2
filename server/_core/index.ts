@@ -5,6 +5,9 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
+import { processExternalImage } from "../lpr";
+import { getCameraSettingsByParkingLot } from "../db";
+import multer from "multer";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
@@ -35,6 +38,54 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+
+  // Multer for handling multipart/form-data (camera image uploads)
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+
+  // Camera image webhook endpoint
+  // 監視カメラからの画像受信用API
+  app.post("/api/camera/upload", upload.single("image"), async (req, res) => {
+    try {
+      const parkingLotId = parseInt(req.body.parkingLotId || req.query.parkingLotId as string);
+      const apiToken = req.body.apiToken || req.query.apiToken as string;
+
+      if (!parkingLotId || isNaN(parkingLotId)) {
+        return res.status(400).json({ success: false, error: "parkingLotId is required" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ success: false, error: "Image file is required" });
+      }
+
+      // カメラ設定からLPR APIトークンを取得
+      let lprApiToken = apiToken;
+      let lprApiUrl: string | undefined;
+
+      if (!lprApiToken) {
+        const cameras = await getCameraSettingsByParkingLot(parkingLotId);
+        if (cameras.length > 0 && cameras[0].lprApiToken) {
+          lprApiToken = cameras[0].lprApiToken;
+          lprApiUrl = cameras[0].lprApiUrl || undefined;
+        }
+      }
+
+      if (!lprApiToken) {
+        return res.status(400).json({ success: false, error: "LPR API token is not configured" });
+      }
+
+      const result = await processExternalImage(
+        parkingLotId,
+        req.file.buffer,
+        lprApiToken,
+        lprApiUrl
+      );
+
+      return res.json(result);
+    } catch (error: any) {
+      console.error("[Camera Upload] Error:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
   // tRPC API
   app.use(
     "/api/trpc",

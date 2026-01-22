@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, lte, sum } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, parkingSpaces, parkingRecords, paymentRecords, paymentMethods, payoutSchedules, InsertParkingSpace, InsertParkingRecord, InsertPaymentRecord, InsertPaymentMethod, InsertPayoutSchedule, globalPaymentSettings, InsertGlobalPaymentSetting } from "../drizzle/schema";
+import { InsertUser, users, parkingSpaces, parkingRecords, paymentRecords, paymentMethods, payoutSchedules, InsertParkingSpace, InsertParkingRecord, InsertPaymentRecord, InsertPaymentMethod, InsertPayoutSchedule, globalPaymentSettings, InsertGlobalPaymentSetting, parkingLots, InsertParkingLot, ParkingLot, vehicleNumberRecords, cameraSettings, InsertVehicleNumberRecord, InsertCameraSetting } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { nanoid } from 'nanoid';
 
@@ -611,8 +611,6 @@ export async function calculateParkingFeeDynamic(entryTime: number, exitTime: nu
 
 
 // ========== マルチテナント対応 ==========
-
-import { parkingLots, InsertParkingLot, ParkingLot } from "../drizzle/schema";
 
 // ========== オーナー管理 ==========
 
@@ -1717,4 +1715,197 @@ export async function getAllSalesDataForExport(startDate?: Date, endDate?: Date)
   }
 
   return filteredResults;
+}
+
+
+// ========== Vehicle Number Recognition Queries ==========
+
+// 車両ナンバー記録を作成
+export async function createVehicleNumberRecord(data: {
+  parkingLotId: number;
+  area?: string;
+  classNumber?: string;
+  kana?: string;
+  digits?: string;
+  fullNumber?: string;
+  plateType?: string;
+  plateUse?: string;
+  plateColor?: string;
+  imageUrl?: string;
+  recognitionSuccess: boolean;
+  rawResponse?: string;
+  capturedAt: number;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(vehicleNumberRecords).values(data);
+  return Number(result[0].insertId);
+}
+
+// 駐車場IDで車両ナンバー記録を取得
+export async function getVehicleNumberRecordsByParkingLot(parkingLotId: number, limit: number = 100) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(vehicleNumberRecords)
+    .where(eq(vehicleNumberRecords.parkingLotId, parkingLotId))
+    .orderBy(desc(vehicleNumberRecords.capturedAt))
+    .limit(limit);
+}
+
+// 日付範囲で車両ナンバー記録を取得
+export async function getVehicleNumberRecordsByDateRange(
+  parkingLotId: number,
+  startDate: number,
+  endDate: number
+) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(vehicleNumberRecords)
+    .where(and(
+      eq(vehicleNumberRecords.parkingLotId, parkingLotId),
+      gte(vehicleNumberRecords.capturedAt, startDate),
+      lte(vehicleNumberRecords.capturedAt, endDate)
+    ))
+    .orderBy(desc(vehicleNumberRecords.capturedAt));
+}
+
+// 全駐車場の車両ナンバー記録を取得（オペレーター用）
+export async function getAllVehicleNumberRecords(limit: number = 100) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select({
+    id: vehicleNumberRecords.id,
+    parkingLotId: vehicleNumberRecords.parkingLotId,
+    area: vehicleNumberRecords.area,
+    classNumber: vehicleNumberRecords.classNumber,
+    kana: vehicleNumberRecords.kana,
+    digits: vehicleNumberRecords.digits,
+    fullNumber: vehicleNumberRecords.fullNumber,
+    plateType: vehicleNumberRecords.plateType,
+    plateUse: vehicleNumberRecords.plateUse,
+    plateColor: vehicleNumberRecords.plateColor,
+    imageUrl: vehicleNumberRecords.imageUrl,
+    recognitionSuccess: vehicleNumberRecords.recognitionSuccess,
+    capturedAt: vehicleNumberRecords.capturedAt,
+    createdAt: vehicleNumberRecords.createdAt,
+  }).from(vehicleNumberRecords)
+    .orderBy(desc(vehicleNumberRecords.capturedAt))
+    .limit(limit);
+}
+
+// オーナーの全駐車場の車両ナンバー記録を取得
+export async function getVehicleNumberRecordsByOwner(ownerId: number, limit: number = 100) {
+  const db = await getDb();
+  if (!db) return [];
+
+  // まずオーナーの駐車場IDを取得
+  const lots = await db.select({ id: parkingLots.id }).from(parkingLots)
+    .where(eq(parkingLots.ownerId, ownerId));
+  
+  if (lots.length === 0) return [];
+
+  const lotIds = lots.map(lot => lot.id);
+  
+  // 各駐車場の車両ナンバー記録を取得
+  const allRecords = [];
+  for (const lotId of lotIds) {
+    const records = await db.select().from(vehicleNumberRecords)
+      .where(eq(vehicleNumberRecords.parkingLotId, lotId))
+      .orderBy(desc(vehicleNumberRecords.capturedAt))
+      .limit(limit);
+    allRecords.push(...records);
+  }
+
+  // 日時順にソートして返す
+  return allRecords.sort((a, b) => b.capturedAt - a.capturedAt).slice(0, limit);
+}
+
+// ========== Camera Settings Queries ==========
+
+// カメラ設定を作成
+export async function createCameraSetting(data: {
+  parkingLotId: number;
+  cameraName: string;
+  cameraType?: string;
+  ipAddress?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  snapshotPath?: string;
+  captureIntervalMinutes?: number;
+  enabled?: boolean;
+  lprApiToken?: string;
+  lprApiUrl?: string;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(cameraSettings).values({
+    ...data,
+    captureIntervalMinutes: data.captureIntervalMinutes ?? 60,
+    enabled: data.enabled ?? true,
+  });
+  return Number(result[0].insertId);
+}
+
+// 駐車場IDでカメラ設定を取得
+export async function getCameraSettingsByParkingLot(parkingLotId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(cameraSettings)
+    .where(eq(cameraSettings.parkingLotId, parkingLotId));
+}
+
+// カメラ設定を更新
+export async function updateCameraSetting(cameraId: number, data: Partial<{
+  cameraName: string;
+  cameraType: string;
+  ipAddress: string;
+  port: number;
+  username: string;
+  password: string;
+  snapshotPath: string;
+  captureIntervalMinutes: number;
+  enabled: boolean;
+  lprApiToken: string;
+  lprApiUrl: string;
+  lastCaptureAt: number;
+}>) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(cameraSettings).set(data).where(eq(cameraSettings.id, cameraId));
+}
+
+// カメラ設定を削除
+export async function deleteCameraSetting(cameraId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.delete(cameraSettings).where(eq(cameraSettings.id, cameraId));
+}
+
+// 有効なカメラ設定を全て取得（定期撮影用）
+export async function getAllEnabledCameraSettings() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(cameraSettings)
+    .where(eq(cameraSettings.enabled, true));
+}
+
+// カメラIDでカメラ設定を取得
+export async function getCameraSettingById(cameraId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(cameraSettings)
+    .where(eq(cameraSettings.id, cameraId))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
 }

@@ -12,6 +12,7 @@ import OwnerDashboard from "./pages/OwnerDashboard";
 import OperatorDashboard from "./pages/OperatorDashboard";
 import OwnerLotQR from "./pages/OwnerLotQR";
 import OwnerPage from "./pages/OwnerPage";
+import VehicleNumberRecords from "./pages/VehicleNumberRecords";
 
 function Router() {
   return (
@@ -23,6 +24,8 @@ function Router() {
       <Route path="/admin/print-qr" component={PrintQR} />
       <Route path="/owner/:customUrl" component={OwnerPage} />
       <Route path="/owner" component={OwnerDashboard} />
+      <Route path="/owner/vehicles" component={VehicleNumberRecords} />
+      <Route path="/owner/:customUrl/vehicles" component={VehicleNumberRecords} />
       <Route path="/owner/lot/:lotId/qr" component={OwnerLotQR} />
       <Route path="/operator" component={OperatorDashboard} />
       <Route path="/404" component={NotFound} />

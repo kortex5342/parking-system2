@@ -68,10 +68,14 @@ export default function OwnerDashboard() {
       <main className="container py-8">
         <CustomUrlContext.Provider value={customUrl}>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2 lg:w-[300px]">
+            <TabsList className="grid w-full grid-cols-3 lg:w-[450px]">
               <TabsTrigger value="overview" className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4" />
                 <span className="hidden sm:inline">売上</span>
+              </TabsTrigger>
+              <TabsTrigger value="vehicles" className="flex items-center gap-2">
+                <Car className="h-4 w-4" />
+                <span className="hidden sm:inline">車両</span>
               </TabsTrigger>
               <TabsTrigger value="profile" className="flex items-center gap-2">
                 <User className="h-4 w-4" />
@@ -85,6 +89,9 @@ export default function OwnerDashboard() {
               </TabsContent>
               <TabsContent value="profile">
                 <ProfileTab />
+              </TabsContent>
+              <TabsContent value="vehicles">
+                <VehiclesTab />
               </TabsContent>
             </div>
           </Tabs>
@@ -834,6 +841,198 @@ function ParkingLotSettingsCard() {
           </CardContent>
         </Card>
       ))}
+    </div>
+  );
+}
+
+
+// 車両ナンバータブ
+function VehiclesTab() {
+  const customUrl = useCustomUrl();
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const { data: records, isLoading, refetch } = trpc.owner.getVehicleNumberRecords.useQuery({
+    customUrl: customUrl || undefined,
+    limit: 100,
+  });
+
+  interface VehicleRecord {
+    id: number;
+    parkingLotId: number;
+    area: string | null;
+    classNumber: string | null;
+    kana: string | null;
+    digits: string | null;
+    fullNumber: string | null;
+    plateType: string | null;
+    plateUse: string | null;
+    plateColor: string | null;
+    imageUrl: string | null;
+    recognitionSuccess: boolean;
+    capturedAt: number;
+    createdAt: Date;
+  }
+
+  // フィルタリング
+  const filteredRecords = records?.filter((record: VehicleRecord) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      record.fullNumber?.toLowerCase().includes(query) ||
+      record.area?.toLowerCase().includes(query) ||
+      record.digits?.toLowerCase().includes(query)
+    );
+  }) || [];
+
+  // 日時フォーマット
+  const formatDateTime = (timestamp: number) => {
+    return new Date(timestamp).toLocaleString('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // プレートカラーのバッジ色
+  const getPlateColorBadge = (color: string | null) => {
+    switch (color) {
+      case '白':
+        return <Badge variant="outline" className="bg-white text-black border-gray-300">白</Badge>;
+      case '緑':
+        return <Badge className="bg-green-600">緑</Badge>;
+      case '黄':
+        return <Badge className="bg-yellow-400 text-black">黄</Badge>;
+      case '黒':
+        return <Badge className="bg-black text-white">黒</Badge>;
+      default:
+        return <Badge variant="secondary">{color || '不明'}</Badge>;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* 統計サマリー */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">総記録数</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{records?.length || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              認識成功
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {records?.filter((r: VehicleRecord) => r.recognitionSuccess).length || 0}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">認識失敗</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {records?.filter((r: VehicleRecord) => !r.recognitionSuccess).length || 0}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 検索 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">車両ナンバー検索</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <Input
+                placeholder="ナンバーで検索（例：練馬、1234）"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <Button variant="outline" onClick={() => refetch()}>
+              更新
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 記録一覧 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>認識履歴</CardTitle>
+          <CardDescription>
+            監視カメラで撮影された車両ナンバーの認識結果（最新100件）
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {filteredRecords.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Car className="h-12 w-12 mb-4 opacity-50" />
+              <p>車両ナンバーの記録がありません</p>
+              <p className="text-sm mt-2">カメラから画像が送信されると、ここに表示されます</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredRecords.map((record: VehicleRecord) => (
+                <div
+                  key={record.id}
+                  className="flex items-center justify-between p-4 border rounded-lg"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`p-2 rounded-full ${record.recognitionSuccess ? 'bg-green-100' : 'bg-red-100'}`}>
+                      <Car className={`h-5 w-5 ${record.recognitionSuccess ? 'text-green-600' : 'text-red-600'}`} />
+                    </div>
+                    <div>
+                      {record.recognitionSuccess && record.fullNumber ? (
+                        <div className="font-bold text-lg">{record.fullNumber}</div>
+                      ) : (
+                        <div className="text-muted-foreground">認識失敗</div>
+                      )}
+                      <div className="text-sm text-muted-foreground flex items-center gap-2">
+                        <Clock className="h-3 w-3" />
+                        {formatDateTime(record.capturedAt)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {record.plateColor && getPlateColorBadge(record.plateColor)}
+                    {record.imageUrl && (
+                      <a
+                        href={record.imageUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline text-sm"
+                      >
+                        画像
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
