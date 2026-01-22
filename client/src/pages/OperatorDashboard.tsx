@@ -19,6 +19,16 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GlobalPaymentSettingsTab } from "@/components/GlobalPaymentSettingsTab";
 
+// ランダム英数字文字列を生成する関数
+function generateRandomCustomUrl(length: number = 10): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 export default function OperatorDashboard() {
   const [selectedOwnerId, setSelectedOwnerId] = useState<number | null>(null);
   const [selectedLotId, setSelectedLotId] = useState<number | null>(null);
@@ -219,8 +229,8 @@ export default function OperatorDashboard() {
       toast.error('名前とメールアドレスを入力してください');
       return;
     }
-    // customUrlを自動生成（メールアドレスのローカルパートを使用）
-    const customUrl = newOwnerEmail.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+    // customUrlを自動生成（ランダム英数字10文字）
+    const customUrl = generateRandomCustomUrl(10);
     createOwnerMutation.mutate({
       name: newOwnerName,
       email: newOwnerEmail,
