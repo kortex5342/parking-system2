@@ -128,7 +128,7 @@ export default function OperatorDashboard() {
     }
   }, [editLotTimePeriods]);
 
-  const deleteMutation = trpc.owner.deleteParkingLot.useMutation({
+  const deleteMutation = trpc.operator.deleteParkingLot.useMutation({
     onSuccess: () => {
       toast.success('駐車場を削除しました');
       setShowDeleteConfirm(false);
