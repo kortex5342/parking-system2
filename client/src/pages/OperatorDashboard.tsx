@@ -136,7 +136,7 @@ export default function OperatorDashboard() {
     },
   });
 
-  const createOwnerMutation = (trpc.admin as any).addOwner.useMutation({
+  const createOwnerMutation = trpc.operator.addOwner.useMutation({
     onSuccess: () => {
       toast.success('オーナーを追加しました');
       setShowAddOwnerDialog(false);
