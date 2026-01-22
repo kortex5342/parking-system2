@@ -26,6 +26,44 @@ const PAYMENT_METHOD_INFO: Record<GlobalPaymentMethod, { name: string; color: st
   credit_card: { name: "クレジットカード", color: "#374151", icon: "credit_card" },
 };
 
+// 複数セッショントークン管理用ヘルパー関数
+const PARKING_SESSIONS_KEY = "parkingSessionTokens";
+
+interface ParkingSession {
+  token: string;
+  spaceId: number;
+  qrCode: string;
+  entryTime: number;
+}
+
+function getParkingSessions(): ParkingSession[] {
+  try {
+    const saved = localStorage.getItem(PARKING_SESSIONS_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveParkingSession(session: ParkingSession): void {
+  const sessions = getParkingSessions();
+  // 同じスペースIDのセッションがあれば置き換え
+  const filtered = sessions.filter(s => s.spaceId !== session.spaceId);
+  filtered.push(session);
+  localStorage.setItem(PARKING_SESSIONS_KEY, JSON.stringify(filtered));
+}
+
+function removeParkingSession(token: string): void {
+  const sessions = getParkingSessions();
+  const filtered = sessions.filter(s => s.token !== token);
+  localStorage.setItem(PARKING_SESSIONS_KEY, JSON.stringify(filtered));
+}
+
+function getSessionByQrCode(qrCode: string): ParkingSession | undefined {
+  const sessions = getParkingSessions();
+  return sessions.find(s => s.qrCode === qrCode);
+}
+
 export default function Scan() {
   const [view, setView] = useState<ViewState>("scan");
   const [qrCode, setQrCode] = useState("");
@@ -44,6 +82,12 @@ export default function Scan() {
       const generatedQr = `LOT-${params.lotId}-SPACE-${params.spaceNumber}`;
       setQrCode(generatedQr);
       setView("space-info");
+      
+      // このスペースに対応するセッショントークンを取得
+      const existingSession = getSessionByQrCode(generatedQr);
+      if (existingSession) {
+        setSessionToken(existingSession.token);
+      }
     }
     
     // 決済完了時の処理
@@ -51,6 +95,9 @@ export default function Scan() {
     const paymentStatus = searchParams.get("payment");
     const token = searchParams.get("token");
     if (paymentStatus === "success" && token) {
+      // 新しい複数セッション管理から削除
+      removeParkingSession(token);
+      // 後方互換性のため古いキーも削除
       localStorage.removeItem("parkingSessionToken");
       setSessionToken(null);
       setView("payment-success");
@@ -61,12 +108,6 @@ export default function Scan() {
       setView("exit-confirm");
       toast.info("決済がキャンセルされました");
       window.history.replaceState({}, '', '/scan');
-    }
-    
-    // ローカルストレージからセッショントークンを復元
-    const savedToken = localStorage.getItem("parkingSessionToken");
-    if (savedToken) {
-      setSessionToken(savedToken);
     }
   }, [params.lotId, params.spaceNumber]);
 
@@ -116,8 +157,16 @@ export default function Scan() {
     setManualInput("");
   };
 
-  const handleEntrySuccess = (token: string) => {
+  const handleEntrySuccess = (token: string, spaceId: number) => {
     setSessionToken(token);
+    // 複数セッション管理に保存
+    saveParkingSession({
+      token,
+      spaceId,
+      qrCode,
+      entryTime: Date.now(),
+    });
+    // 後方互換性のため古いキーにも保存
     localStorage.setItem("parkingSessionToken", token);
     setView("entry-success");
   };
@@ -131,6 +180,11 @@ export default function Scan() {
   };
 
   const handlePaymentSuccess = () => {
+    // 複数セッション管理から削除
+    if (sessionToken) {
+      removeParkingSession(sessionToken);
+    }
+    // 後方互換性のため古いキーも削除
     localStorage.removeItem("parkingSessionToken");
     setSessionToken(null);
     setView("payment-success");
@@ -164,7 +218,6 @@ export default function Scan() {
             onBack={handleBack}
             onEntrySuccess={handleEntrySuccess}
             onExitConfirm={handleExitConfirm}
-            sessionToken={sessionToken}
           />
         )}
         {view === "entry-success" && (
@@ -309,19 +362,19 @@ function SpaceInfoView({
   onBack,
   onEntrySuccess,
   onExitConfirm,
-  sessionToken,
 }: {
   qrCode: string;
   onBack: () => void;
-  onEntrySuccess: (token: string) => void;
+  onEntrySuccess: (token: string, spaceId: number) => void;
   onExitConfirm: () => void;
-  sessionToken: string | null;
 }) {
   const { data, isLoading, error } = trpc.parking.getSpaceByQrCode.useQuery({ qrCode });
   const checkInMutation = trpc.parking.checkIn.useMutation({
-    onSuccess: (data) => {
-      toast.success(`入庫完了: スペース ${data.spaceNumber}`);
-      onEntrySuccess(data.sessionToken);
+    onSuccess: (result) => {
+      toast.success(`入庫完了: スペース ${result.spaceNumber}`);
+      if (data?.space?.id) {
+        onEntrySuccess(result.sessionToken, data.space.id);
+      }
     },
     onError: (err) => {
       toast.error(err.message);
@@ -387,11 +440,7 @@ function SpaceInfoView({
             </div>
           )}
 
-          {isOccupied && sessionToken ? (
-            <Button onClick={onExitConfirm} className="w-full" size="lg">
-              出庫手続きへ
-            </Button>
-          ) : !isOccupied ? (
+          {!isOccupied ? (
             <Button
               onClick={() => checkInMutation.mutate({ qrCode })}
               disabled={checkInMutation.isPending}
@@ -404,6 +453,10 @@ function SpaceInfoView({
                 <Car className="w-5 h-5 mr-2" />
               )}
               入庫する
+            </Button>
+          ) : isOccupied && activeRecord ? (
+            <Button onClick={onExitConfirm} className="w-full" size="lg">
+              出庫手続きへ
             </Button>
           ) : (
             <p className="text-center text-muted-foreground">
