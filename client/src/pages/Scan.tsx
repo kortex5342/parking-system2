@@ -87,6 +87,9 @@ export default function Scan() {
       const existingSession = getSessionByQrCode(generatedQr);
       if (existingSession) {
         setSessionToken(existingSession.token);
+      } else {
+        // このスペースにはセッションがないのでリセット
+        setSessionToken(null);
       }
     }
     
@@ -171,7 +174,10 @@ export default function Scan() {
     setView("entry-success");
   };
 
-  const handleExitConfirm = () => {
+  const handleExitConfirm = (token?: string) => {
+    if (token) {
+      setSessionToken(token);
+    }
     setView("exit-confirm");
   };
 
@@ -261,7 +267,7 @@ function ScanView({
   showCamera: boolean;
   setShowCamera: (value: boolean) => void;
   sessionToken: string | null;
-  onExitConfirm: () => void;
+  onExitConfirm: (token?: string) => void;
 }) {
   return (
     <div className="space-y-6">
@@ -280,7 +286,7 @@ function ScanView({
               <Clock className="w-5 h-5 text-amber-600" />
               <p className="font-medium text-amber-800 dark:text-amber-200">駐車中です</p>
             </div>
-            <Button onClick={onExitConfirm} className="w-full" variant="outline">
+            <Button onClick={() => onExitConfirm(sessionToken || undefined)} className="w-full" variant="outline">
               出庫手続きへ
             </Button>
           </CardContent>
@@ -366,7 +372,7 @@ function SpaceInfoView({
   qrCode: string;
   onBack: () => void;
   onEntrySuccess: (token: string, spaceId: number) => void;
-  onExitConfirm: () => void;
+  onExitConfirm: (token: string) => void;
 }) {
   const { data, isLoading, error } = trpc.parking.getSpaceByQrCode.useQuery({ qrCode });
   const checkInMutation = trpc.parking.checkIn.useMutation({
@@ -455,7 +461,7 @@ function SpaceInfoView({
               入庫する
             </Button>
           ) : isOccupied && activeRecord ? (
-            <Button onClick={onExitConfirm} className="w-full" size="lg">
+            <Button onClick={() => onExitConfirm(activeRecord.sessionToken)} className="w-full" size="lg">
               出庫手続きへ
             </Button>
           ) : (
